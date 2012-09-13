@@ -18,6 +18,8 @@ module dit
      parameter X_WDTH = 8,
       // Number of bits in twiddle factor values. (must be equal to X_WDTH at the moment)
      parameter TF_WDTH = 8,
+     // W width
+     parameter W_WDTH = 1,
      // Whether to run in debug mode.
      parameter DEBUGMODE = 0
      )
@@ -32,10 +34,16 @@ module dit
     input wire [2*X_WDTH-1:0] in_x,
     // Set to 1 when new data placed in in_x.
     input wire                in_nd,
+    // Arbitary data to pass through.
+    input wire [W_WDTH-1:0]   in_w,
     // Output value.
     output reg [2*X_WDTH-1:0] out_x,
     // Set to 1 when new data is placed in out_x.
     output reg                out_nd,
+    // Arbitary data to pass out.
+    output reg [W_WDTH-1:0]   out_w,
+    // Whether the ouput is the first element of a vector.
+    output reg                first,
     // Set to 1 when can't keep up with input data.
     output reg                overflow
     );
@@ -52,11 +60,13 @@ module dit
    reg                          bufferin_full0_A;
    reg                          bufferin_full0_B;
    wire                         bufferin_full0;
+   reg [W_WDTH-1:0]             bufferin_w0[N-1:0];
    assign bufferin_full0 = bufferin_full0_A + bufferin_full0_B;
    reg [X_WDTH*2-1:0]           bufferin1[N-1:0];
    reg                          bufferin_full1_A;
    reg                          bufferin_full1_B;
    wire                         bufferin_full1;
+   reg [W_WDTH-1:0]             bufferin_w1[N-1:0];
    assign bufferin_full1 = bufferin_full1_A + bufferin_full1_B;
    reg                          bufferin_write_switch;
    reg                          bufferin_read_switch;
@@ -67,8 +77,10 @@ module dit
    // Working buffers.
    reg [X_WDTH*2-1:0]           bufferX[N-1:0];
    reg [X_WDTH*2-1:0]           bufferY[N-1:0];
+   reg [W_WDTH-1:0]             buffer_w[N-1:0];
    // Output buffer.
    reg [X_WDTH*2-1:0]           bufferout[N-1:0];
+   reg [W_WDTH-1:0]             bufferout_w[N-1:0];
    // Whether the output buffer is full.
    // We have two registers since they are drive by different processes.
    // 'A' flips back and forth as the buffer is fulled.
@@ -119,9 +131,15 @@ module dit
                   if (bufferin_write_full)
                     overflow <= 1'b1;
                   if (bufferin_write_switch)
-                    bufferin1[bufferin_addr] <= in_x;
+                    begin
+                       bufferin1[bufferin_addr] <= in_x;
+                       bufferin_w1[bufferin_addr] <= in_w;
+                    end
                   else
-                    bufferin0[bufferin_addr] <= in_x;
+                    begin
+                       bufferin0[bufferin_addr] <= in_x;
+                       bufferin_w0[bufferin_addr] <= in_w;
+                    end
                   bufferin_addr <= bufferin_addr + 1;
                   if (&bufferin_addr)
                     begin
@@ -163,7 +181,9 @@ module dit
           begin
              if (bufferout_full)
                begin
+                  first <= (~|bufferout_addr);
                   out_x <= bufferout[bufferout_addr];
+                  out_w <= bufferout_w[bufferout_addr];
                   out_nd <= 1'b1;
                   bufferout_addr <= bufferout_addr + 1;
                   if (&bufferout_addr)
@@ -433,12 +453,26 @@ module dit
                       begin
                          `MSG_DEBUG("Waiting for data to be written.");
                       end
+                    //
                  end
                default:
                  begin
                     fsm_state <= FSM_ST_INIT;
                  end
              endcase
+             if (x_nd)
+               begin
+                  if (first_stage)
+                    begin
+                       buffer_w[out0_addr] <= bufferin_read_switch?bufferin_w1[out0_addr]:bufferin_w0[out0_addr];
+                       buffer_w[out1_addr] <= bufferin_read_switch?bufferin_w1[out1_addr]:bufferin_w0[out1_addr];
+                    end
+                  if (last_stage)
+                    begin
+                       bufferout_w[out0_addr] <= buffer_w[out0_addr];
+                       bufferout_w[out1_addr] <= buffer_w[out1_addr];
+                    end
+               end
           end              
      end
    

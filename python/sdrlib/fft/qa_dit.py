@@ -8,6 +8,7 @@ MyHDL Test Bench to check the vericode FFT.
 import os
 import random
 import unittest
+import logging
 
 from numpy import fft
 
@@ -18,56 +19,83 @@ from sdrlib.testbench import TestBench
 from sdrlib.fft.build import generate
 from sdrlib import config
 
+logger = logging.getLogger(__name__)
+
 class DITTestBench(TestBench):
     """
     Helper class for doing testing.
     
     Args:
         nlog2: The base 2 logarithm of the FFT length.
-        tf_width: Bit width of each component (real and imag) of the twiddle factor.
-        x_width: Bit width of each component of the inputs and outputs.
+        width: Bit width of each component (real and imag) of a complex number.
+        mwidth: Bit width of the meta data.
         sendnth: Send an input on every `sendnth` clock cycle.
         data: A list of complex points to send.
     """
 
-    def __init__(self, nlog2, width, sendnth, data):
+    extra_signal_names = ['first']
+
+    def __init__(self, nlog2, width, mwidth, sendnth, data, ms):
         self.n = pow(2, nlog2)
         self.width = width
+        self.mwidth = mwidth
         self.nlog2 = nlog2
-        TestBench.__init__(self, sendnth, data, self.width, self.width)
-        outputdir = os.path.join(config.builddir, 'fft')
-        self.executable = generate(self.n, self.width, outputdir)
+        TestBench.__init__(self, sendnth, data, ms, self.width*2, self.width*2)
+        self.executable, inputfiles = generate(self.n, self.width, self.mwidth)
 
 
 class TestFFT(unittest.TestCase):
-    
-    def setUp(self):
-        self.myrand = random.Random(0).random
 
-    def test_basic(self):
-        """
-        Test the DUT with a random complex stream.
-        """
+    def setUp(self):
+        rg = random.Random(0)
+        self.myrand = rg.random
+        self.myrandint = rg.randint
+
+    def test_sixteen(self):
         width = 16
         nlog2 = 4
-        N = pow(2, nlog2)
         # Number of FFT to perform
         N_data_sets = 4
-        # Approx many steps we'll need.
-        steps_rqd = 2*N_data_sets*int(40.0 / 8 / 3 * nlog2 * N)
         # How often to send input.
         # For large FFTs this must be larger since the speed scales as NlogN.
         # Otherwise we get an overflow error.
         sendnth = 2
+        self.random_template(nlog2, width, N_data_sets, sendnth)
+
+    def test_four(self):
+        width = 16
+        nlog2 = 2
+        N_data_sets = 4
+        sendnth = 2
+        self.random_template(nlog2, width, N_data_sets, sendnth)
+
+    def test_overflow(self):
+        width = 16
+        nlog2 = 4
+        N_data_sets = 4
+        sendnth = 1
+        # Check that this raises an overflow error
+        self.assertRaises(StandardError, self.random_template, (nlog2, width, N_data_sets, sendnth))
+
+    def random_template(self, nlog2, width, N_data_sets, sendnth):
+        """
+        Test the DUT with a random complex stream.
+        """
+        N = pow(2, nlog2)
+        # Approx many steps we'll need.
+        steps_rqd = 2*N_data_sets*int(40.0 / 8 / 3 * nlog2 * N)
         # Generate some random input.
         data_sets = []
         data = []
         for i in range(0, N_data_sets):
-            nd = [self.myrand()*2-1 for x in range(N)]
+            nd = [self.myrand()*2-1 + self.myrand()*2j-1jfor x in range(N)]
             data_sets.append(nd)
             data += nd
+        mwidth = 3
+        ms = [self.myrandint(0, pow(2, mwidth)-1) for d in data]
         # Create, setup and simulate the test bench.
-        tb = DITTestBench(nlog2, width, sendnth, data)
+        print(data)
+        tb = DITTestBench(nlog2, width, mwidth, sendnth, data, ms)
         tb.simulate(steps_rqd)
 
         # Confirm that our data is correct.
@@ -78,15 +106,17 @@ class TestFFT(unittest.TestCase):
         # same to the numpy output.
         effts = [[x/N for x in fft.fft(data_set)] for data_set in data_sets]
         i = 0
+        self.assertEqual(len(rffts), len(effts))
         for rfft, efft in zip(rffts, effts):
-            print(i)
-            i = i + 1
-            print(rfft)
-            print(efft)
             self.assertEqual(len(rfft), len(efft))
             for e,r in zip(efft, rfft):
+                print(e, r)
                 self.assertAlmostEqual(e.real, r.real, 3)
                 self.assertAlmostEqual(e.imag, r.imag, 3)
+        # Compare ms
+        for r, e in zip(tb.out_ms, ms):
+            self.assertEqual(r, e)
                 
 if __name__ == '__main__':
+    config.setup_logging(logging.DEBUG)
     unittest.main()

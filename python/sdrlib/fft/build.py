@@ -13,39 +13,38 @@ from sdrlib import config
 
 logger = logging.getLogger(__name__)
 
-def generate(N, width, outputdir=None):
+def generate(N, width, mwidth):
     """
     Generate the fft files to perform an fft.
     
     Args:
-        name: A name to identify this build.
         N: Length of the FFT.
         width: Number of bits in a real number.  Complex is twice this.
-        outputdir: Where to place the generated files.
+        mwidth: Number of bits in data passed through.
     """
     logN = math.log(N)/math.log(2)
     if (logN != int(logN)):
         raise ValueError("N must be a power of 2.")
     logN = int(logN)
     make_twiddlefactor(N, width)
-    inputfiles = ['dut_dit.v', 'dit.v', 'butterfly.v']
+    inputfiles = ['dit.v', 'butterfly.v']
     for f in inputfiles:
         shutil.copyfile(os.path.join(config.verilogdir, 'fft', f),
                         os.path.join(config.builddir, 'fft', f))
-    executable = "fft_{n}_{x_width}_{tf_width}".format(n=N, x_width=width,
-                                                       tf_width=width)
+    executable = "fft_{n}_{x_width}_{tf_width}".format(
+        n=N, x_width=width, tf_width=width)
     executable = os.path.join(config.builddir, 'fft', executable)
     inputfiles.append('twiddlefactors_{n}.v'.format(n=N))
     inputfiles = [os.path.join(config.builddir, 'fft', f) for f in inputfiles]
-    inputfiles = ' '.join(inputfiles)
+    inputfilestr = ' '.join(inputfiles + [os.path.join(config.builddir, 'fft', 'dut_dit.v')])
     cmd = ("iverilog -o {executable} -DN={n} -DX_WDTH={x_width} -DNLOG2={nlog2} "
-           "-DTF_WDTH={tf_width} "
+           "-DTF_WDTH={tf_width} -DM_WDTH={mwidth} "
            "{inputfiles} "
-           ).format(executable=executable, n=N, x_width=width, tf_width=width,
-                    nlog2=logN, inputfiles=inputfiles)
+           ).format(executable=executable, n=N, x_width=width, mwidth=mwidth,
+                    tf_width=width, nlog2=logN, inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
-    return executable
+    return executable, inputfiles
            
            
 def f_to_istr(width, f):

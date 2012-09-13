@@ -1,6 +1,6 @@
 import os
 
-from myhdl import Cosimulation, Signal, delay, always, Simulation
+from myhdl import Cosimulation, Signal, delay, always, Simulation, _simulator
 
 from sdrlib import config
 from sdrlib.conversions import c_to_int, int_to_c
@@ -11,12 +11,15 @@ class TestBench(object):
     """
 
     extra_signal_names = []
-    base_signal_names = ['clk', 'rst_n', 'in_data', 'in_nd', 'out_data',
-                         'out_nd', 'error']
+    base_signal_names = ['clk', 'rst_n', 'in_data', 'in_nd', 'in_m', 
+                         'out_data', 'out_nd', 'out_m', 'error']
+    driver_factories = []
 
-    def __init__(self, sendnth, data, in_width, out_width):
+    def __init__(self, sendnth, data, ms, in_width, out_width):
         self.sendnth = sendnth
         self.data = data
+        self.ms = ms
+        assert(len(data) == len(ms))
         self.in_width = in_width
         self.out_width = out_width
         # The MyHDL Signals
@@ -26,6 +29,7 @@ class TestBench(object):
                 setattr(self, sn, Signal(1))
             else:
                 setattr(self, sn, Signal(0))
+        self.drivers = [self.clk_driver, self.send_input, self.get_output, self.check_error]
 
     def simulate(self, clks):
         """
@@ -34,9 +38,12 @@ class TestBench(object):
         myhdlvpi = os.path.join(config.verilogdir, 'myhdl.vpi')
         command = "vvp -m {myhdlvpi} {executable}".format(myhdlvpi=myhdlvpi, executable=self.executable)
         cosimdict = dict([(sn, getattr(self, sn)) for sn in self.signal_names])
-        self.dut = Cosimulation(command, **cosimdict)
-        sim = Simulation(self.dut, self.clk_driver(), self.control())
+        dut = Cosimulation(command, **cosimdict)
+        drivers = [df() for df in self.drivers]
+        sim = Simulation(dut, *drivers)
         sim.run(2*clks)
+        dut.__del__()
+        del dut
 
     def clk_driver(self):
         @always(delay(1))
@@ -45,14 +52,10 @@ class TestBench(object):
             self.clk.next = not self.clk
         return run
 
-    def control(self):
-        """
-        
-        """
+    def send_input(self):
         self.count = 0
         self.first = True
         self.datapos = 0
-        self.output = []
         @always(self.clk.posedge)
         def run():
             """
@@ -67,16 +70,37 @@ class TestBench(object):
                 self.rst_n.next = 1
                 # Send input.
                 if self.count >= self.sendnth and self.datapos < len(self.data):
-                    self.in_data.next = c_to_int(self.data[self.datapos], self.in_width)
+                    self.in_data.next = c_to_int(self.data[self.datapos], self.in_width/2)
+                    self.in_m.next = self.ms[self.datapos]
                     self.in_nd.next = 1
                     self.datapos += 1
                     self.count = 0
                 else:
                     self.in_nd.next = 0
                     self.count += 1
-                if self.error:
-                    raise StandardError("The error wire is high.")
-            # Receive output.
-            if self.out_nd:
-                self.output.append(int_to_c(self.out_data, self.out_width))
         return run
+
+    def get_output(self):
+        self.output = []
+        self.out_ms = []
+        @always(self.clk.posedge)
+        def run():
+            """
+            Receive output.
+            """
+            if self.out_nd:
+                self.output.append(int_to_c(self.out_data, self.out_width/2))
+                self.out_ms.append(int(self.out_m))
+        return run
+
+    def check_error(self):
+        self.error_count = 0
+        @always(self.clk.posedge)
+        def run():
+            if self.error_count > 0:
+                raise StandardError("The error wire is high.")
+            if self.error:
+                self.error_count += 1
+        return run
+        
+        

@@ -11,13 +11,16 @@ module dut_dit;
    wire [`X_WDTH*2-1:0]         out_data;
    reg                          in_nd;
    wire                         out_nd;
+   reg [`M_WDTH-1:0]            in_m;
+   wire [`M_WDTH-1:0]           out_m;
+   wire                         first;
    wire                         error;
    
    initial begin
-	  $from_myhdl(clk, rst_n, in_data, in_nd);
-	  $to_myhdl(out_data, out_nd, error);
+	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m);
+	  $to_myhdl(out_data, out_nd, out_m, first, error);
    end
    
-   dit #(`N, `NLOG2, `TF_WDTH, `X_WDTH) dut (clk, rst_n, in_data, in_nd, out_data, out_nd, error);
+   dit #(`N, `NLOG2, `X_WDTH, `TF_WDTH, `M_WDTH) dut (clk, rst_n, in_data, in_nd, in_m, out_data, out_nd, out_m, first, error);
    
 endmodule  

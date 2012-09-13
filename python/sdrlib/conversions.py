@@ -16,15 +16,8 @@ def c_to_int(c, x_width):
     # Real part in high x_width bits.
     # Imag part in low x_width bits.
     # Complex components must be between -1 and 1.
-    if c.real < -1 or c.real > 1 or c.imag < -1 or c.imag > 1:
-        raise ValueError("The real and imag components of the taps must be between -1 and 1.")
-    if c.real < 0:
-        c = c.real + 2 + c.imag * 1j
-    if c.imag < 0:
-        c = c.real + (c.imag+2)*1j
-    maxint = pow(2, x_width)-1
-    i = int(round(c.real/2*maxint))
-    q = int(round(c.imag/2*maxint))
+    i = f_to_int(c.real, x_width)
+    q = f_to_int(c.imag, x_width)
     return i * pow(2, x_width) + q
 
 def cs_to_int(cs, x_width):
@@ -58,12 +51,8 @@ def int_to_c(k, x_width):
     ik = k >> x_width
     qk = k % pow(2, x_width)
     maxint = pow(2, x_width)-1
-    i = ik * 2.0 / maxint
-    q = qk * 2.0 / maxint
-    if i > 1:
-        i -= 2
-    if q > 1:
-        q -= 2
+    i = int_to_f(ik, x_width)
+    q = int_to_f(qk, x_width)
     return i + (0+1j)*q
 
 def f_to_sint(f, x_width):
@@ -76,3 +65,27 @@ def f_to_sint(f, x_width):
     i = int(round(f*maxint))
     return i
 
+def sint_to_int(si, width):
+    """
+    Converts a signed integer to a two complement integer.
+    """
+    if si >=0:
+        return si
+    else:
+        return si + pow(2, width)
+
+def f_to_int(f, width):
+    return sint_to_int(f_to_sint(f, width), width)
+
+def sint_to_f(si, width):
+    maxint = pow(2, width-1)-1
+    return float(si)/maxint
+
+def int_to_sint(i, width):
+    middleint = pow(2, width)/2
+    if i >= middleint:
+        i -= pow(2, width)
+    return i
+
+def int_to_f(i, width):
+    return sint_to_f(int_to_sint(i, width), width)
