@@ -9,7 +9,7 @@ import shutil
 
 from jinja2 import Environment, FileSystemLoader
 
-from sdrlib import config
+from fpga_sdrlib import config
 
 logger = logging.getLogger(__name__)
 

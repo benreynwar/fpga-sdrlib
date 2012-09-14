@@ -1,3 +1,6 @@
+# Copyright (c) 2012 Ben Reynwar
+# Released under MIT License (see LICENSE.txt)
+
 import logging
 import os
 from os.path import dirname

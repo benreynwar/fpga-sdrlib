@@ -1,3 +1,6 @@
+# Copyright (c) 2012 Ben Reynwar
+# Released under MIT License (see LICENSE.txt)
+
 import cmath
 import math
 import os
@@ -6,8 +9,8 @@ import logging
 
 from jinja2 import Environment, FileSystemLoader
 
-from sdrlib.conversions import f_to_sint
-from sdrlib import config
+from fpga_sdrlib.conversions import f_to_sint
+from fpga_sdrlib import config
 
 logger = logging.getLogger(__name__)
 

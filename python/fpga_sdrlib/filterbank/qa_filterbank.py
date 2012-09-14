@@ -13,10 +13,10 @@ import logging
 
 from myhdl import always
 
-from sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
-from sdrlib.filterbank.build import generate
-from sdrlib.testbench import TestBench
-from sdrlib import config
+from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
+from fpga_sdrlib.filterbank.build import generate
+from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib import config
 
 def convolve(data, taps):
     out = []

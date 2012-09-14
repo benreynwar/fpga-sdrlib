@@ -1,11 +1,14 @@
+# Copyright (c) 2012 Ben Reynwar
+# Released under MIT License (see LICENSE.txt)
+
 import os
 import math
 import shutil
 import logging
 
-from sdrlib.fft.build import generate as generate_fft
-from sdrlib.filterbank.build import generate as generate_fb
-from sdrlib import config
+from fpga_sdrlib.fft.build import generate as generate_fft
+from fpga_sdrlib.filterbank.build import generate as generate_fb
+from fpga_sdrlib import config
 
 logger = logging.getLogger(__name__)
 

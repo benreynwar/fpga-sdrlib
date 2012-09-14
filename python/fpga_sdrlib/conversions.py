@@ -1,3 +1,6 @@
+# Copyright (c) 2012 Ben Reynwar
+# Released under MIT License (see LICENSE.txt)
+
 """
 Functions to convert between complex numbers and integers.
 

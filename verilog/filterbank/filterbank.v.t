@@ -1,4 +1,7 @@
 // -*- verilog -*- 
+// Copyright (c) 2012 Ben Reynwar
+// Released under MIT License (see LICENSE.txt)
+
 module filterbank_ccf
   #(
     parameter N = 8,

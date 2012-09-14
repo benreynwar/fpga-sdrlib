@@ -1,9 +1,12 @@
+# Copyright (c) 2012 Ben Reynwar
+# Released under MIT License (see LICENSE.txt)
+
 import os
 
 from myhdl import Cosimulation, Signal, delay, always, Simulation, _simulator
 
-from sdrlib import config
-from sdrlib.conversions import c_to_int, int_to_c
+from fpga_sdrlib import config
+from fpga_sdrlib.conversions import c_to_int, int_to_c
 
 class TestBench(object):
     """

@@ -12,9 +12,9 @@ import math
 from myhdl import always
 from numpy import fft
 from scipy import signal
-from sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
-from sdrlib.channelizer.build import generate
-from sdrlib.testbench import TestBench
+from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
+from fpga_sdrlib.channelizer.build import generate
+from fpga_sdrlib.testbench import TestBench
 
 def convolve(X, Y):
     """

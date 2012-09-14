@@ -12,12 +12,10 @@ import logging
 
 from numpy import fft
 
-from sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
-from sdrlib.testbench import TestBench
-#from pyfft import fftstages
-
-from sdrlib.fft.build import generate
-from sdrlib import config
+from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
+from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib.fft.build import generate
+from fpga_sdrlib import config
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +92,6 @@ class TestFFT(unittest.TestCase):
         mwidth = 3
         ms = [self.myrandint(0, pow(2, mwidth)-1) for d in data]
         # Create, setup and simulate the test bench.
-        print(data)
         tb = DITTestBench(nlog2, width, mwidth, sendnth, data, ms)
         tb.simulate(steps_rqd)
 
@@ -110,7 +107,6 @@ class TestFFT(unittest.TestCase):
         for rfft, efft in zip(rffts, effts):
             self.assertEqual(len(rfft), len(efft))
             for e,r in zip(efft, rfft):
-                print(e, r)
                 self.assertAlmostEqual(e.real, r.real, 3)
                 self.assertAlmostEqual(e.imag, r.imag, 3)
         # Compare ms
