@@ -10,6 +10,7 @@ import shutil
 from jinja2 import Environment, FileSystemLoader
 
 from fpga_sdrlib import config
+from fpga_sdrlib.conversions import cs_to_dicts
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ def generate(N, width, mwidth):
     if (logN != int(logN)):
         raise ValueError("N must be a power of 2.")
     logN = int(logN)
+    dut_dit_fn = os.path.join(config.builddir, 'fft', 'dut_dit.v')
+    shutil.copyfile(os.path.join(config.verilogdir, 'fft', 'dut_dit.v'),
+                    dut_dit_fn)
     make_twiddlefactor(N, width)
     inputfiles = ['dit.v', 'butterfly.v']
     for f in inputfiles:
@@ -36,7 +40,7 @@ def generate(N, width, mwidth):
     executable = os.path.join(config.builddir, 'fft', executable)
     inputfiles.append('twiddlefactors_{n}.v'.format(n=N))
     inputfiles = [os.path.join(config.builddir, 'fft', f) for f in inputfiles]
-    inputfilestr = ' '.join(inputfiles + [os.path.join(config.builddir, 'fft', 'dut_dit.v')])
+    inputfilestr = ' '.join(inputfiles + [dut_dit_fn])
     cmd = ("iverilog -o {executable} -DN={n} -DX_WDTH={x_width} -DNLOG2={nlog2} "
            "-DTF_WDTH={tf_width} -DM_WDTH={mwidth} "
            "{inputfiles} "
@@ -46,19 +50,6 @@ def generate(N, width, mwidth):
     os.system(cmd)
     return executable, inputfiles
            
-           
-def f_to_istr(width, f):
-    """
-    f is between 0 and 1.
-    If f is 1 we want binary to be 010000000 (maxno).
-
-    Used for generating the twiddle factor module.
-    """
-    if f < 0 or f > 1:
-        raise ValueError("f must be between 0 and 1")
-    maxno = pow(2, width-2)
-    return str(int(round(f * maxno)))
-
 def make_twiddlefactor(N, tf_width, template_fn=None, output_fn=None):
     """
     Generates a verilog file containing a twiddle factor module from a template file.
@@ -70,24 +61,8 @@ def make_twiddlefactor(N, tf_width, template_fn=None, output_fn=None):
     env = Environment(loader=FileSystemLoader(config.verilogdir))
     template = env.get_template(template_fn)
     Nlog2 = int(math.log(N, 2))
-    tfs = []
-    for i in range(0, N/2):
-        tf = {}
-        tf['i'] = i
-        v = cmath.exp(-i*2j*cmath.pi/N)
-        if v.real > 0:
-            tf['re_sign'] = ''
-        else:
-            tf['re_sign'] = '-'
-            v = -v.real + (0+1j)*v.imag
-        if v.imag > 0:
-            tf['im_sign'] = ''
-        else:
-            tf['im_sign'] = '-'
-            v = v.real - (0+1j)*v.imag
-        tf['re'] = f_to_istr(tf_width, v.real)
-        tf['im'] = f_to_istr(tf_width, v.imag)
-        tfs.append(tf)
+    vs = [cmath.exp(-i*2j*cmath.pi/N) for i in range(0, N/2)]
+    tfs = cs_to_dicts(vs, tf_width*2, clean1=True)
     if not os.path.exists(os.path.dirname(output_fn)):
         os.makedirs(os.path.dirname(output_fn))
     f_out = open(output_fn, 'w')

@@ -21,7 +21,7 @@ module taps
    initial
      begin
         {% for channel in channels %}{% for tap in channel.taps %}tapvalues[{{channel.i}}][(1+{{tap.i}})*WDTH-1 -:WDTH] <= {{tap.sign}}{{tap_width}}'sd{{tap.value}};
-        {% endfor%}
+        {% endfor %}
         {% endfor %}    
      end
 

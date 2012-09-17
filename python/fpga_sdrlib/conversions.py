@@ -58,13 +58,21 @@ def int_to_c(k, x_width):
     q = int_to_f(qk, x_width)
     return i + (0+1j)*q
 
-def f_to_sint(f, x_width):
+def f_to_sint(f, x_width, clean1=False):
     """
     Takes a float and returns a signed integer.
+    
+    If clean1 is True then we scale so that 1 in binary is
+    0100000 rather than 0111111.
+    This allows a multiplication by 1 followed by a down shift
+    to leave the result unchanged.OB
     """
     if f < -1 or f > 1:
         raise ValueError("The tap must be between -1 and 1.")
-    maxint = pow(2, x_width-1)-1
+    if clean1 is False:
+        maxint = pow(2, x_width-1)-1
+    else:
+        maxint = pow(2, x_width-2)
     i = int(round(f*maxint))
     return i
 
@@ -92,3 +100,69 @@ def int_to_sint(i, width):
 
 def int_to_f(i, width):
     return sint_to_f(int_to_sint(i, width), width)
+
+def f_to_istr(width, f):
+    """
+    f is between 0 and 1.
+    If f is 1 we want binary to be 010000000 (maxno).
+
+    Used for generating the twiddle factor module.
+    """
+    if f < 0 or f > 1:
+        raise ValueError("f must be between 0 and 1")
+    maxno = pow(2, width-2)
+    return str(int(round(f * maxno)))
+
+def is_to_dicts(iis, width):
+    """
+    Converts a list of integer to a list of dictionaries of with
+    attributes (i, sign, value)
+    Useful to send to template formatter.
+    """
+    dicts = []
+    for i, ii in enumerate(iis):
+        d = {}
+        d['i'] = i
+        if ii >= 0:
+            d['sign'] = ''
+        else:
+            d['sign'] = '-'
+        d['value'] = abs(ii)
+        dicts.append(d)
+    return dicts
+
+def fs_to_dicts(fs, width, clean1=False):
+    """
+    Converts a list of floats to a list of dictionaries of with
+    attributes (i, sign, value)
+    Useful to send to template formatter.
+    """
+    iis = [f_to_sint(f, width, clean1=clean1) for f in fs]
+    return is_to_dicts(iis, width)
+
+def cs_to_dicts(cs, width, clean1=False):
+    """
+    Converts a list of complex numbers to a list of dictionaries of with
+    attributes (i, re_sign, im_sign, re, im)
+    Useful to send to template formatter.
+    """
+    dicts = []
+    for i, c in enumerate(cs):
+        d = {}
+        d['i'] = i
+        if c.real > 0:
+            d['re_sign'] = ''
+        else:
+            d['re_sign'] = '-'
+            c = -c.real + (0+1j)*c.imag
+        if c.imag > 0:
+            d['im_sign'] = ''
+        else:
+            d['im_sign'] = '-'
+            c = c.real - (0+1j)*c.imag
+        d['re'] = str(f_to_sint(c.real, width/2, clean1=clean1))
+        d['im'] = str(f_to_sint(c.imag, width/2, clean1=clean1))
+        
+        dicts.append(d)
+    return dicts
+    

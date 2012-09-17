@@ -9,7 +9,7 @@ import logging
 
 from jinja2 import Environment, FileSystemLoader
 
-from fpga_sdrlib.conversions import f_to_sint
+from fpga_sdrlib.conversions import fs_to_dicts
 from fpga_sdrlib import config
 
 logger = logging.getLogger(__name__)
@@ -94,17 +94,7 @@ def make_taps(name, chantaps, width, output_fn=None):
     for i, taps in enumerate(chantaps):
         channel = {}
         channel['i'] = i
-        channel['taps'] = []
-        for j, tap in enumerate(taps):
-            if tap >= 0:
-                sign = ''
-            else:
-                sign = '-'
-            channel['taps'].append({
-                    'sign': sign,
-                    'value': abs(f_to_sint(tap, width)),
-                    'i': j,
-                    })
+        channel['taps'] = fs_to_dicts(taps, width)
         channels.append(channel)
     template = env.get_template(template_fn)
     if not os.path.exists(os.path.dirname(output_fn)):
@@ -137,16 +127,3 @@ def make_filterbank(n_chans, filter_length, template_fn='filterbank.v.t',
     f_out.close()
     return output_fn
                                
-    
-def f_to_istr(width, f):
-    """
-    f is between 0 and 1.
-    If f is 1 we want binary to be 010000000 (maxno).
-
-    Used for generating the twiddle factor module.
-    """
-    if f < 0 or f > 1:
-        raise ValueError("f must be between 0 and 1")
-    maxno = pow(2, width-2)
-    return str(int(round(f * maxno)))
-    
