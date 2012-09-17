@@ -8,22 +8,18 @@ from myhdl import Cosimulation, Signal, delay, always, Simulation, _simulator
 from fpga_sdrlib import config
 from fpga_sdrlib.conversions import c_to_int, int_to_c
 
-class TestBench(object):
+class TestBenchBase(object):
     """
-    Base Class to create testing helper classes.
+    A minimal TestBench.
+    Inherit from here directly if no input data is used.
     """
 
     extra_signal_names = []
-    base_signal_names = ['clk', 'rst_n', 'in_data', 'in_nd', 'in_m', 
+    base_signal_names = ['clk', 'rst_n',
                          'out_data', 'out_nd', 'out_m', 'error']
     driver_factories = []
 
-    def __init__(self, sendnth, data, ms, in_width, out_width):
-        self.sendnth = sendnth
-        self.data = data
-        self.ms = ms
-        assert(len(data) == len(ms))
-        self.in_width = in_width
+    def __init__(self, out_width):
         self.out_width = out_width
         # The MyHDL Signals
         self.signal_names = self.extra_signal_names + self.base_signal_names
@@ -32,8 +28,39 @@ class TestBench(object):
                 setattr(self, sn, Signal(1))
             else:
                 setattr(self, sn, Signal(0))
-        self.drivers = [self.clk_driver, self.send_input, self.get_output, self.check_error]
+        self.drivers = [self.clk_driver, self.get_output, self.check_error]
 
+    def clk_driver(self):
+        @always(delay(1))
+        def run():
+            """ Drives the clock. """
+            self.clk.next = not self.clk
+        return run
+
+
+    def get_output(self):
+        self.output = []
+        self.out_ms = []
+        @always(self.clk.posedge)
+        def run():
+            """
+            Receive output.
+            """
+            if self.out_nd:
+                self.output.append(int_to_c(self.out_data, self.out_width/2))
+                self.out_ms.append(int(self.out_m))
+        return run
+
+    def check_error(self):
+        self.error_count = 0
+        @always(self.clk.posedge)
+        def run():
+            if self.error_count > 0:
+                raise StandardError("The error wire is high.")
+            if self.error:
+                self.error_count += 1
+        return run
+        
     def simulate(self, clks):
         """
         Run a test bench simulation.
@@ -48,12 +75,24 @@ class TestBench(object):
         dut.__del__()
         del dut
 
-    def clk_driver(self):
-        @always(delay(1))
-        def run():
-            """ Drives the clock. """
-            self.clk.next = not self.clk
-        return run
+        
+class TestBench(TestBenchBase):
+    """
+    Base Class to create testing helper classes.
+    """
+
+    extra_signal_names = []
+    base_signal_names = ['clk', 'rst_n', 'in_data', 'in_nd', 'in_m', 
+                         'out_data', 'out_nd', 'out_m', 'error']
+
+    def __init__(self, sendnth, data, ms, in_width, out_width):
+        TestBenchBase.__init__(self, out_width)
+        self.sendnth = sendnth
+        self.data = data
+        self.ms = ms
+        assert(len(data) == len(ms))
+        self.in_width = in_width
+        self.drivers += [self.send_input]
 
     def send_input(self):
         self.count = 0
@@ -82,28 +121,3 @@ class TestBench(object):
                     self.in_nd.next = 0
                     self.count += 1
         return run
-
-    def get_output(self):
-        self.output = []
-        self.out_ms = []
-        @always(self.clk.posedge)
-        def run():
-            """
-            Receive output.
-            """
-            if self.out_nd:
-                self.output.append(int_to_c(self.out_data, self.out_width/2))
-                self.out_ms.append(int(self.out_m))
-        return run
-
-    def check_error(self):
-        self.error_count = 0
-        @always(self.clk.posedge)
-        def run():
-            if self.error_count > 0:
-                raise StandardError("The error wire is high.")
-            if self.error:
-                self.error_count += 1
-        return run
-        
-        
