@@ -28,10 +28,12 @@ module channelizer
    wire [MWDTH-1:0]       filtered_m;
    wire                   filtered_error;
    wire                   filtered_ff;
+   reg                    unaligned;
+   wire                   channelized_error;
 
    assign error = (filtered_error | channelized_error | unaligned);
 
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (rst_n)
           begin
@@ -63,7 +65,6 @@ module channelizer
    wire [MWDTH-1:0]       channelized_m;
    wire                   channelized_ff;
    wire                   channelized_first;
-   wire                   channelized_error;
 
    dit #(N, LOGN, WDTH/2, WDTH/2, MWDTH+1) dit_i
        (.clk(clk),
@@ -81,18 +82,17 @@ module channelizer
    // Keep the channels we want.
    reg [N-1:0]     default_desired_channels;
    reg [N-1:0]     desired_channels;
-   reg             unaligned;
    reg [LOGN-1:0]  channel;
    reg             looking_for_first_channel;
    initial
      begin
         channel <= {LOGN{1'b0}};
         default_desired_channels <= {N{1'b1}};
-        desired_channels <= default_desired_channels;
+        desired_channels <= {N{1'b1}};
         unaligned <= 1'b0;
         looking_for_first_channel <= 1'b1;
      end
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (~rst_n)
           begin

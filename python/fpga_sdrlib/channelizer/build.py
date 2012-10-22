@@ -6,13 +6,18 @@ import math
 import shutil
 import logging
 
+from jinja2 import Environment, FileSystemLoader
+
 from fpga_sdrlib.fft.build import generate as generate_fft
 from fpga_sdrlib.filterbank.build import generate as generate_fb
-from fpga_sdrlib import config
+from fpga_sdrlib import config, b100
 
 logger = logging.getLogger(__name__)
 
-def generate(name, n_chans, taps, width, mwidth):
+env = Environment(loader=FileSystemLoader(
+        os.path.join(config.verilogdir, 'channelizer')))
+
+def generate(name, n_chans, taps, width, mwidth, qa_args={}):
     """
     Generate the fft files to perform an fft.
     
@@ -21,6 +26,7 @@ def generate(name, n_chans, taps, width, mwidth):
         taps: The taps to use for the channelizer.
         width: Number of bits in a complex number.
         mwidth: Number of bits in meta data.
+        qa_args: Arguments for data_source module if we're doing QA on FPGA.
     """
     logn = math.log(n_chans)/math.log(2)
     if int(logn) != logn:
@@ -38,6 +44,8 @@ def generate(name, n_chans, taps, width, mwidth):
     chan_builddir= os.path.join(config.builddir, 'channelizer')
     if not os.path.exists(chan_builddir):
         os.makedirs(chan_builddir)
+    if qa_args:
+        qa_channelizer_fn = make_qa_channelizer(width, mwidth, n_chans, flt_len, qa_args)
     dut_channelizer_fn = os.path.join(chan_builddir, 'dut_channelizer.v')
     shutil.copyfile(os.path.join(config.verilogdir, 'channelizer', 'dut_channelizer.v'),
                     dut_channelizer_fn)
@@ -57,5 +65,30 @@ def generate(name, n_chans, taps, width, mwidth):
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
-    return executable, inputfilestr
+    return executable, inputfiles
 
+def make_qa_channelizer(width, mwidth, n, fltlen, qa_args):
+    """
+    Generates a verilog file to use for QA on FPGA.
+    """
+    sendnth = qa_args['sendnth']
+    n_data = qa_args['n_data']
+    logn = int(math.ceil(math.log(n)/math.log(2)))
+    logsendnth = int(math.ceil(math.log(sendnth)/math.log(2)))
+    logndata = int(math.ceil(math.log(n_data)/math.log(2)))
+    template_fn = 'qa_channelizer.v.t'
+    output_fn = os.path.join(config.builddir, 'channelizer',
+                             'qa_channelizer.v')
+    template = env.get_template(template_fn)
+    if not os.path.exists(os.path.dirname(output_fn)):
+        os.makedirs(os.path.dirname(output_fn))
+    f_out = open(output_fn, 'w')
+    f_out.write(template.render(
+            width=width, mwidth=mwidth, n=n, fltlen=fltlen, logn=logn,
+            sendnth=sendnth, logsendnth=logsendnth, n_data=n_data,
+            logndata=logndata,
+            ))
+    f_out.close()
+    return output_fn
+    
+    

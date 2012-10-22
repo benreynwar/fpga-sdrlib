@@ -113,7 +113,7 @@ module dit
         overflow <= 1'b0;
      end
 
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (!rst_n)
           begin
@@ -129,7 +129,10 @@ module dit
                begin
                   // Check for overflowed data.
                   if (bufferin_write_full)
-                    overflow <= 1'b1;
+                    begin
+                       overflow <= 1'b1;
+                       `MSG_DEBUG("We overflowed");
+                    end
                   if (bufferin_write_switch)
                     begin
                        bufferin1[bufferin_addr] <= in_x;
@@ -169,7 +172,7 @@ module dit
         out_nd <= 1'b0;
      end
    
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (!rst_n)
           begin
@@ -325,7 +328,7 @@ module dit
      end
    
    // Create the FSM machine
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (!rst_n)
           begin
@@ -523,7 +526,7 @@ module dit
         z_nd_last <= 1'b0;
      end
    
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
 	 begin
 		if (!rst_n)
 		  begin

@@ -11,12 +11,13 @@ module dut_data_source;
    wire                         out_nd;
    wire [`MWIDTH-1:0]           out_m;
    wire                         error;
+   wire                         first;                        
    
    initial begin
 	  $from_myhdl(clk, rst_n);
-	  $to_myhdl(out_data, out_nd, out_m, error);
+	  $to_myhdl(out_data, out_nd, out_m, error, first);
    end
    
-   data_source #(`SENDNTH, `LOGSENDNTH, `N_LOOPS, `LOGNLOOPS, `WIDTH, `MWIDTH, `N_DATA, `LOGNDATA) dut (clk, rst_n, out_nd, out_data, out_m, error);
+   data_source #(`SENDNTH, `LOGSENDNTH, `WIDTH, `MWIDTH, `N_DATA, `LOGNDATA) dut (clk, rst_n, out_nd, out_data, out_m, error, first);
    
 endmodule  

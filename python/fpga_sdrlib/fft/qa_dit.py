@@ -39,7 +39,7 @@ class DITTestBench(TestBench):
         self.mwidth = mwidth
         self.nlog2 = nlog2
         TestBench.__init__(self, sendnth, data, ms, self.width*2, self.width*2)
-        self.executable, inputfiles = generate(self.n, self.width, self.mwidth)
+        self.executable, inputfiles = generate('icarus', self.n, self.width, self.mwidth)
 
 
 class TestFFT(unittest.TestCase):
@@ -49,7 +49,7 @@ class TestFFT(unittest.TestCase):
         self.myrand = rg.random
         self.myrandint = rg.randint
 
-    def test_sixteen(self):
+    def atest_sixteen(self):
         width = 16
         nlog2 = 4
         # Number of FFT to perform
@@ -57,7 +57,7 @@ class TestFFT(unittest.TestCase):
         # How often to send input.
         # For large FFTs this must be larger since the speed scales as NlogN.
         # Otherwise we get an overflow error.
-        sendnth = 2
+        sendnth = 10
         self.random_template(nlog2, width, N_data_sets, sendnth)
 
     def test_four(self):
@@ -67,7 +67,7 @@ class TestFFT(unittest.TestCase):
         sendnth = 2
         self.random_template(nlog2, width, N_data_sets, sendnth)
 
-    def test_overflow(self):
+    def atest_overflow(self):
         width = 16
         nlog2 = 4
         N_data_sets = 4
@@ -112,7 +112,32 @@ class TestFFT(unittest.TestCase):
         # Compare ms
         for r, e in zip(tb.out_ms, ms):
             self.assertEqual(r, e)
-                
+
+    def atest_single_one(self):
+        """
+        Test the FFT-DUT with an input that is all zeros with a single one in the middle.
+        """
+        nlog2 = 3
+        width = 16
+        sendnth = 2
+        N = pow(2, nlog2)
+        L = 50
+        # Approx many steps we'll need.
+        steps_rqd = sendnth*int(10.0 * L / 3 * nlog2 * N)
+        print(steps_rqd)
+        # Generate some random input.
+        data = [0] * (L/2) + [1] + [0]*(L/2-1)
+        mwidth = 3
+        ms = [self.myrandint(0, pow(2, mwidth)-1) for d in data]
+        # Create, setup and simulate the test bench.
+        tb = DITTestBench(nlog2, width, mwidth, sendnth, data, ms)
+        tb.simulate(steps_rqd)
+
+        # Confirm that our data is correct.
+        r_data = [x*N for x in tb.output]
+        print(r_data)
+        
+
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
     unittest.main()

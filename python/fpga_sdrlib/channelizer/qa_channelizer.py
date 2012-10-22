@@ -15,6 +15,7 @@ from scipy import signal
 from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
 from fpga_sdrlib.channelizer.build import generate
 from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib.filterbank.qa_filterbank import scale_taps
 
 def convolve(X, Y):
     """
@@ -85,6 +86,54 @@ class ChannelizerTestBench(TestBench):
             if self.out_nd:
                 self.out_fc.append(int(self.first_channel))
         return run
+
+def get_mixed_sinusoids(fs, n_data, freqs, amplitudes):
+    """
+    Return a stream of mixed sinusoids.  One sinusoid in
+    each channel.
+    
+    Args:
+        fs: The sampling frequency for an individual channel.
+        n_data: The number of datapoints to return.
+        freqs: The relative frequency of the signal in each stream.
+        amplitudes: The amplitudes in each stream.
+    """
+    M = len(freqs)
+    assert(len(amplitudes) == M)
+    ifs = M * fs
+    data = []
+    ts = [float(x)/ifs for x in range(n_data)]
+    for t in ts:
+        d = 0
+        for i, fa in enumerate(zip(freqs, amplitudes)):
+            f, a = fa
+            sf = f + i*fs
+            d += a*math.cos(2*math.pi*sf*t) + a*1j*math.sin(2*math.pi*sf*t)
+        data.append(d)
+    return data
+
+def get_channelizer_taps(M, n_taps=100):
+    taps = signal.firwin2(100, [0, 1.0/M, 1.0/M+0.05, 1], [1, 1, 0, 0])
+    # Divide by integral of absolute values to prevent the possibility
+    # of overflow.
+    chantaps = [taps[i::M] for i in range(M)]
+    scaledtaps, tapscalefactor = scale_taps(chantaps)
+    taps = [float(x)/tapscalefactor for x in taps]
+    return taps, maxsum
+        
+def get_expected_channelized_data(self, L, freqs, amplitudes):
+    """
+    Get the expected data in each channel.
+    """
+    def make_data(f, a):
+        t = [float(x)/self.fs for x in  xrange(L)]
+        return [a*math.cos(2*math.pi*f*x) + a*1j*math.sin(2*math.pi*f*x)
+                for x in t]
+    expected_data = [make_data(f, a) for f, a in zip(freqs, amplitudes)]
+    return expected_data
+
+
+
         
 class TestChannelizer(unittest.TestCase):
     """
@@ -112,13 +161,13 @@ class TestChannelizer(unittest.TestCase):
         # Width of a complex number
         self.width = 32
         # Generate some taps
-        self.taps, self.tapscale = self.get_taps(self.M)
+        self.taps, self.tapscale = get_channelizer_taps(self.M, n_taps=100)
         # How often to send input.
         # For large FFTs this must be larger since the speed scales as MlogM.
         # Otherwise we get an overflow error.
         self.sendnth = 2
-        # Get the input data (uses self.freqs and self.amplitudes)
-        self.data = self.get_input_data()
+        # Get the input data
+        self.data = get_mixed_sinusoids(self.fs, self.n_data, self.freqs, self.amplitudes)
         # Scale the input data to remain in (-1 to 1)
         datamax = 0
         for d in self.data:
@@ -135,48 +184,6 @@ class TestChannelizer(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def get_taps(self, M):
-        taps = signal.firwin2(100, [0, 1.0/M, 1.0/M+0.05, 1], [1, 1, 0, 0])
-        # Divide by integral of absolute values to prevent the possibility
-        # of overflow.
-        chantaps = [taps[i::M] for i in range(M)]
-        maxsum = 0
-        for ts in chantaps:
-            summed = sum([abs(t) for t in ts])
-            if summed > maxsum:
-                maxsum = summed
-        taps = [float(x)/maxsum for x in taps]
-        return taps, maxsum
-        
-
-    def get_expected_data(self, L):
-        """
-        Get the expected data in each channel.
-        """
-        def make_data(f, a):
-            t = [float(x)/self.fs for x in  xrange(L)]
-            return [a*math.cos(2*math.pi*f*x) + a*1j*math.sin(2*math.pi*f*x)
-                    for x in t]
-        expected_data = [make_data(f, a) for f, a in zip(self.freqs, self.amplitudes)]
-        return expected_data
-
-    def get_input_data(self):
-        """
-        Get the input data containing the combined sinusoids from each
-        channel.
-        """
-        data = []
-        ts = [float(x)/self.ifs for x in range(self.n_data)]
-        for t in ts:
-            d = 0
-            for i, fa in enumerate(zip(self.freqs, self.amplitudes)):
-                f, a = fa
-                sf = f + i*self.fs
-                d += a*math.cos(2*math.pi*sf*t) + a*1j*math.sin(2*math.pi*sf*t)
-            data.append(d)
-        sf = 100
-        return data
-
     def test_channelizer(self):
         """
         Test a channelizer.
@@ -186,7 +193,8 @@ class TestChannelizer(unittest.TestCase):
         received = [x*self.M for x in self.tb.output]
         skip = int(math.ceil(float(len(self.taps))/self.M-1)*self.M)
         received = [received[i+skip::self.M] for i in range(self.M)]
-        expected = self.get_expected_data(self.n_data/self.M)
+        expected = get_expected_channelized_data(
+            self.n_data/self.M, self.freqs, self.amplitudes)
         p_convolved, p_final = pychannelizer(self.taps, self.data, self.M)
         for ed, dd, pd in zip(expected, received, p_final):
             pd = [p*self.tapscale*self.inputscale for p in pd]

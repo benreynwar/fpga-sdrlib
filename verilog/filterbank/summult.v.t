@@ -2,6 +2,28 @@
 // Copyright (c) 2012 Ben Reynwar
 // Released under MIT License (see LICENSE.txt)
 
+module multiplier
+  #(
+    parameter WDTH = 16
+    )
+   (
+    input wire clk,
+    input wire signed [WDTH-1:0] x,
+    input wire signed [WDTH-1:0] y,
+    output wire [WDTH-1:0] z
+    );
+   
+   wire signed [2*WDTH-1:0] multed;
+
+   assign z = multed >>> WDTH-1; 
+
+   always @ (posedge clk)
+     begin
+        multed <= x*y;
+     end
+
+endmodule
+
 module summult 
   #(
     parameter WDTH = 16,
@@ -30,27 +52,50 @@ module summult
    assign shifted_re = out_data_re >>> WDTH-1; 
    assign shifted_im = out_data_im >>> WDTH-1;
    assign out_data = {shifted_re[WDTH-1:0], shifted_im[WDTH-1:0]};
-
+   
    {{inputassigns}}
    
    initial
      begin
-        out_nd = 1'b0;
-        overflow = 1'b0;
+        out_nd <= 1'b0;
+        overflow <= 1'b0;
+        counter <= {SADDRLEN {1'b0}};
      end
+
+   // Create multipliers
+   {% for i in mult_is %}
+     multiplier #(WDTH) multiplier_{{i}} (clk, mult_x_{{i}}, mult_y_{{i}}, mult_z_{{i}}); 
+   {% endfor %}
    
    always @ (posedge clk)
      if (~rst_n)
        begin
-        out_nd = 1'b0;
-        overflow = 1'b0;
+          out_nd <= 1'b0;
+          overflow <= 1'b0;
+          s <= {SADDRLEN {1'b0}};
        end
      else
        begin
           if (in_nd)
             begin
-               out_nd <= 1'b1;
+               s <= {SADDRLEN {1'b0}};
                out_m <= in_m;
+               {% for i, m in all_ms.0 %}
+                 mult_x_{{2*m}} <= in_xs[2*WDTH*{{i}}-1 -:WDTH];
+                 mult_x_{{2*m+1}} <= in_xs[2*WDTH*{{i}}-1-WDTH -:WDTH];
+               {% endfor %}
+            end
+          if (SADDRLEN == S)
+            begin
+               out_nd <= 1'b1;
+               s <= s+1;
+            end
+          else if (SADDRLEN == S+1)
+            out_nd <= 1'b0;
+          else
+            begin
+               sum_re <= sum_re {% for i in re_is %} + mult_z{{i}} {% for each %}
+            end
                //out_data_re <= in_xs[WDTH*(2*N-0)-1: WDTH*(2*N-1)] * in_ys[WDTH*N-1] + ...
                out_data_re <= {{real_sum}};
                //out_data_im <= in_xs[WDTH*(2*N-1)-1: WDTH*(2*N-2)] * in_ys[WDTH*N-1] + ...

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader(
         os.path.join(config.verilogdir, 'filterbank')))
 
-def generate(name, chantaps, width, mwidth):
+def generate(name, chantaps, width, mwidth, qa_args={}):
     """
     Generate the files for making a filterbank.
     
@@ -28,12 +28,15 @@ def generate(name, chantaps, width, mwidth):
     """
     flt_len = len(chantaps[0])
     n_filters = len(chantaps)
+    print(flt_len, n_filters)
     addrlen = int(math.ceil(math.log(n_filters)/math.log(2)))
     for taps in chantaps:
         if len(taps) != flt_len:
             raise ValueError("All filters must be of the same length.")
     summult_fn = make_summult(flt_len)
     taps_fn = make_taps(name, chantaps, width/2)
+    if qa_args:
+        make_qa_filterbank(width, mwidth, n_filters, flt_len, qa_args)
     filterbank_fn = make_filterbank(n_filters, flt_len)
     dut_filterbank_fn = os.path.join(config.builddir, 'filterbank', 'dut_filterbank.v')
     shutil.copyfile(os.path.join(config.verilogdir, 'filterbank', 'dut_filterbank.v'),
@@ -90,17 +93,17 @@ def make_taps(name, chantaps, width, output_fn=None):
     if output_fn is None:
         output_fn = os.path.join(config.builddir, 'filterbank',
                                  'taps_{name}.v'.format(name=name))
+    n_filters = len(chantaps)
+    addrlen = int(math.ceil(math.log(n_filters)/math.log(2)))
     channels = []
     for i, taps in enumerate(chantaps):
-        channel = {}
-        channel['i'] = i
-        channel['taps'] = fs_to_dicts(taps, width)
-        channels.append(channel)
+        channels.append((i, reversed(fs_to_dicts(taps, width))))
     template = env.get_template(template_fn)
     if not os.path.exists(os.path.dirname(output_fn)):
         os.makedirs(os.path.dirname(output_fn))
     f_out = open(output_fn, 'w')
-    f_out.write(template.render(channels=channels, tap_width=width))    
+    f_out.write(template.render(channels=channels, tap_width=width,
+                                addrlen=addrlen))
     f_out.close()
     return output_fn
     
@@ -115,7 +118,8 @@ def make_filterbank(n_chans, filter_length, template_fn='filterbank.v.t',
                                  'filterbank_{0}.v'.format(filter_length))
     t = "histories[{i}] <= {{WDTH*FLTLEN{{1'b0}} }};"
     zerohistories = '\n'.join([t.format(i=i) for i in range(n_chans)])
-    t = "histories[filter_n][WDTH*(FLTLEN-{i})-1:WDTH] <= histories[filter_n][WDTH*(FLTLEN-{ip})-1:0];"
+    #t = "histories[filter_n][WDTH*(FLTLEN-{i})-1:WDTH] <= histories[filter_n][WDTH*(FLTLEN-{ip})-1:0];"
+    t = "shifted_history <= histories[filter_n][WDTH*(FLTLEN-{ip})-1:0];"
     shifthistories = [t.format(i=i, ip=i+1) for i in range(1, filter_length-1)]
     shifthistories = "\n".join(shifthistories)
     template = env.get_template(template_fn)
@@ -127,3 +131,28 @@ def make_filterbank(n_chans, filter_length, template_fn='filterbank.v.t',
     f_out.close()
     return output_fn
                                
+def make_qa_filterbank(width, mwidth, n, fltlen, qa_args):
+    """
+    Generates a verilog file to use for QA on FPGA.
+    """
+    sendnth = qa_args['sendnth']
+    n_data = qa_args['n_data']
+    logn = int(math.ceil(math.log(n)/math.log(2)))
+    logsendnth = int(math.ceil(math.log(sendnth)/math.log(2)))
+    logndata = int(math.ceil(math.log(n_data)/math.log(2)))
+    template_fn = 'qa_filterbank.v.t'
+    output_fn = os.path.join(config.builddir, 'filterbank',
+                             'qa_filterbank.v')
+    template = env.get_template(template_fn)
+    if not os.path.exists(os.path.dirname(output_fn)):
+        os.makedirs(os.path.dirname(output_fn))
+    f_out = open(output_fn, 'w')
+    f_out.write(template.render(
+            width=width, mwidth=mwidth, n=n, addrlen=logn, fltlen=fltlen,
+            sendnth=sendnth, logsendnth=logsendnth, n_data=n_data,
+            logndata=logndata,
+            ))
+    f_out.close()
+    return output_fn
+    
+    

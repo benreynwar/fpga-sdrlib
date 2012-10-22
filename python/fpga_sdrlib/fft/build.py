@@ -14,7 +14,10 @@ from fpga_sdrlib.conversions import cs_to_dicts
 
 logger = logging.getLogger(__name__)
 
-def generate(N, width, mwidth):
+env = Environment(loader=FileSystemLoader(
+        os.path.join(config.verilogdir, 'fft')))
+
+def generate(method, N, width, mwidth):
     """
     Generate the fft files to perform an fft.
     
@@ -23,15 +26,20 @@ def generate(N, width, mwidth):
         width: Number of bits in a real number.  Complex is twice this.
         mwidth: Number of bits in data passed through.
     """
+    assert(method in ('icarus', 'xilinx'))
     logN = math.log(N)/math.log(2)
     if (logN != int(logN)):
         raise ValueError("N must be a power of 2.")
     logN = int(logN)
+    fftbuilddir = os.path.join(config.builddir, 'fft')
+    if not os.path.exists(fftbuilddir):
+        os.makedirs(fftbuilddir)
     dut_dit_fn = os.path.join(config.builddir, 'fft', 'dut_dit.v')
     shutil.copyfile(os.path.join(config.verilogdir, 'fft', 'dut_dit.v'),
                     dut_dit_fn)
     make_twiddlefactor(N, width)
-    inputfiles = ['dit.v', 'butterfly.v']
+    butterfly_fn = make_butterfly(method)
+    inputfiles = ['dit.v']
     for f in inputfiles:
         shutil.copyfile(os.path.join(config.verilogdir, 'fft', f),
                         os.path.join(config.builddir, 'fft', f))
@@ -39,6 +47,7 @@ def generate(N, width, mwidth):
         n=N, x_width=width, tf_width=width)
     executable = os.path.join(config.builddir, 'fft', executable)
     inputfiles.append('twiddlefactors_{n}.v'.format(n=N))
+    inputfiles.append(butterfly_fn)
     inputfiles = [os.path.join(config.builddir, 'fft', f) for f in inputfiles]
     inputfilestr = ' '.join(inputfiles + [dut_dit_fn])
     cmd = ("iverilog -o {executable} -DN={n} -DX_WDTH={x_width} -DNLOG2={nlog2} "
@@ -49,6 +58,21 @@ def generate(N, width, mwidth):
     logger.debug(cmd)
     os.system(cmd)
     return executable, inputfiles
+
+def make_butterfly(method):
+    """
+    Generates a verilog file for the butterly module.
+    """
+    template_fn = os.path.join('fft', 'butterfly.v.t')
+    output_fn = os.path.join(config.builddir, 'fft', 'butterfly_{0}.v'.format(method))
+    env = Environment(loader=FileSystemLoader(config.verilogdir))
+    template = env.get_template(template_fn)
+    f_out = open(output_fn, 'w')
+    assert(method in ('icarus', 'xilinx'))
+    xilinx = (method == 'xilinx')
+    f_out.write(template.render(xilinx=xilinx))
+    f_out.close()    
+    return output_fn
            
 def make_twiddlefactor(N, tf_width, template_fn=None, output_fn=None):
     """
@@ -68,5 +92,24 @@ def make_twiddlefactor(N, tf_width, template_fn=None, output_fn=None):
     f_out = open(output_fn, 'w')
     f_out.write(template.render(tf_width=tf_width, tfs=tfs, Nlog2=Nlog2))    
     f_out.close()
+    
+def make_qa_dit(n, width, mwidth):
+    """
+    Generates a verilog file to use for QA on FPGA.
+    """
+    logn = int(math.ceil(math.log(n)/math.log(2)))
+    template_fn = 'qa_dit.v.t'
+    output_fn = os.path.join(config.builddir, 'fft',
+                             'qa_dit.v')
+    template = env.get_template(template_fn)
+    if not os.path.exists(os.path.dirname(output_fn)):
+        os.makedirs(os.path.dirname(output_fn))
+    f_out = open(output_fn, 'w')
+    f_out.write(template.render(
+            width=width, mwidth=mwidth, n=n, logn=logn,
+            ))
+    f_out.close()
+    return output_fn
+    
     
 

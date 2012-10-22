@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader(
         os.path.join(config.verilogdir, 'data_source')))
 
-def generate(name, data, ms, sendnth, n_loops, width, mwidth):
+def generate(name, data, ms, sendnth, width, mwidth):
     """
     Generate the files for making a data_source.
     
@@ -25,17 +25,17 @@ def generate(name, data, ms, sendnth, n_loops, width, mwidth):
         name: A name for the data_source to use with the generated files.
         data: A list of the complex data to send.
         ms: A list of the meta data to send (integers).
+        sendnth: Send a data point every sendnth clock cycles.
         width: Number of bits in a complex number.
         mwidth: Number of bits in meta data.
     """
     n_data = len(data)
     assert(len(ms) == n_data)
     log_n_data = int(math.ceil(math.log(n_data)/math.log(2)))
-    log_n_loops = int(math.ceil(math.log(n_loops)/math.log(2)))
-    if log_n_loops == 0:
-        log_n_loops = 1
     log_sendnth = int(math.ceil(math.log(sendnth)/math.log(2)))
     data_source_fn = make_data_source(name, data, ms, width, mwidth);
+    qa_data_source_fn = make_qa_data_source(width, mwidth, sendnth, log_sendnth,
+                                            n_data, log_n_data)
     os.path.join(config.builddir, 'data_source', 'data_source.v')
     dut_data_source_fn = os.path.join(config.builddir, 'data_source', 'dut_data_source.v')
     shutil.copyfile(os.path.join(config.verilogdir, 'data_source', 'dut_data_source.v'),
@@ -46,12 +46,10 @@ def generate(name, data, ms, sendnth, n_loops, width, mwidth):
     executable = os.path.join(config.builddir, 'data_source', executable)
     cmd = ("iverilog -o {executable} "
            "-DSENDNTH={sendnth} -DLOGSENDNTH={log_sendnth} "
-           "-DN_LOOPS={n_loops} -DLOGNLOOPS={log_n_loops} "
            "-DWIDTH={width} -DMWIDTH={mwidth} "
            "-DN_DATA={n_data} -DLOGNDATA={log_n_data} {inputfiles}"
            ).format(executable=executable,
                     sendnth=sendnth, log_sendnth=log_sendnth,
-                    n_loops=n_loops, log_n_loops=log_n_loops,
                     width=width, mwidth=mwidth,
                     n_data=n_data, log_n_data=log_n_data, 
                     inputfiles=inputfilestr)
@@ -66,13 +64,33 @@ def make_data_source(name, data, ms, width, mwidth):
     template_fn = 'data_source.v.t'
     output_fn = os.path.join(config.builddir, 'data_source',
                              'data_source_{name}.v'.format(name=name))
+    log_n_data = int(math.ceil(math.log(len(data))/math.log(2)))
     data = cs_to_dicts(data, width, clean1=False)
-    ms = is_to_dicts(ms, mwidth)
+    combined = zip(range(len(data)), data, ms)
     template = env.get_template(template_fn)
     if not os.path.exists(os.path.dirname(output_fn)):
         os.makedirs(os.path.dirname(output_fn))
     f_out = open(output_fn, 'w')
-    f_out.write(template.render(data=data, ms=ms, width=width/2, mwidth=mwidth))
+    f_out.write(template.render(combined=combined, width=width/2, mwidth=mwidth,
+                                logndata=log_n_data))
+    f_out.close()
+    return output_fn
+    
+def make_qa_data_source(width, mwidth, sendnth, logsendnth, n_data, logndata):
+    """
+    Generates a verilog file to use for QA on FPGA.
+    """
+    template_fn = 'qa_data_source.v.t'
+    output_fn = os.path.join(config.builddir, 'data_source',
+                             'qa_data_source.v')
+    template = env.get_template(template_fn)
+    if not os.path.exists(os.path.dirname(output_fn)):
+        os.makedirs(os.path.dirname(output_fn))
+    f_out = open(output_fn, 'w')
+    f_out.write(template.render(
+            width=width, mwidth=mwidth, sendnth=sendnth, logsendnth=logsendnth,
+            n_data=n_data, logndata=logndata,
+            ))
     f_out.close()
     return output_fn
     

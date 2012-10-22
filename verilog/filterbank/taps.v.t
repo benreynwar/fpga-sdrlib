@@ -10,19 +10,20 @@ module taps
     parameter WDTH = 0
     )
   (
-   input wire [ADDRLEN-1:0] addr,
-   output wire [FLTLEN*WDTH-1:0] outtaps
+   input wire                   clk,
+   input wire [ADDRLEN-1:0]     addr,
+   output reg [FLTLEN*WDTH-1:0] outtaps
    );
    
    reg [FLTLEN*WDTH-1:0]         tapvalues[N-1:0];
    
-   assign outtaps = tapvalues[addr];
-
-   initial
+   always @ (posedge clk)
      begin
-        {% for channel in channels %}{% for tap in channel.taps %}tapvalues[{{channel.i}}][(1+{{tap.i}})*WDTH-1 -:WDTH] <= {{tap.sign}}{{tap_width}}'sd{{tap.value}};
+        case (addr)
+        {% for i, taps in channels %}
+          {{addrlen}}'d{{i}}: outtaps <= { {% for tap in taps %}{{tap.sign}}{{tap_width}}'sd{{tap.value}}{% if not loop.last %},{% endif %}{% endfor %} };
         {% endfor %}
-        {% endfor %}    
+        endcase
      end
-
+   
 endmodule

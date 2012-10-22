@@ -26,6 +26,9 @@ module filterbank_ccf
    
    reg [WDTH*(FLTLEN-1)-1:0] histories[N-1:0];
    reg [ADDRLEN-1:0]         filter_n;
+   reg [ADDRLEN-1:0]         filter_n_old;
+   reg                       in_nd_old;
+   reg [WDTH*(FLTLEN-1)-1:0] shifted_history;
    wire [WDTH*(FLTLEN-1)-1:0] mult_histories;
    wire [WDTH/2*FLTLEN-1:0]   mult_taps;
    wire                       in_first_filter;
@@ -37,7 +40,7 @@ module filterbank_ccf
         filter_n <= {ADDRLEN{1'b0}};
         {{zerohistories}}
      end
-   always @ (posedge clk or negedge rst_n)
+   always @ (posedge clk)
      begin
         if (~rst_n)
           begin
@@ -46,20 +49,26 @@ module filterbank_ccf
           end
         else
           begin
+             in_nd_old <= in_nd;
              if (in_nd)
                begin
                   if (filter_n == N-1)
                     filter_n <= {ADDRLEN{1'b0}};
                   else
                     filter_n <= filter_n + 1;
-                  {{shifthistories}}
-                  histories[filter_n][WDTH-1 -:WDTH] <= in_data;
+                  shifted_history <= {histories[filter_n][WDTH*(FLTLEN-2)-1:0], in_data};
+                  filter_n_old <= filter_n;
                end
-          end
+             if (in_nd_old)
+               begin
+                  histories[filter_n_old] <= shifted_history;
+               end
+           end
      end
 
    taps #(N, ADDRLEN, FLTLEN, WDTH/2) taps_i
-     (.addr(filter_n),
+     (.clk(clk),
+      .addr(filter_n),
       .outtaps(mult_taps)
      );
 
