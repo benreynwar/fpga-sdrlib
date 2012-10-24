@@ -10,32 +10,26 @@ import unittest
 import logging
 
 from fpga_sdrlib import config
-from fpga_sdrlib.nothing.build import generate
-from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib.nothing.build import generate_nothing_executable
+from fpga_sdrlib.testbench import TestBenchIcarus
 from fpga_sdrlib.message import msg_utils
 from fpga_sdrlib.message.msg_codes import parse_packet
 from fpga_sdrlib.conversions import int_to_c
 
-class NothingTestBench(TestBench):
+class NothingTestBenchIcarus(TestBenchIcarus):
     """
     Helper class for doing testing.
     
     Args:
         name: A name to use with for generated files.
-        width: Bit width of a complex number.
-        mwidth: The bit width of sent meta data.
+        in_samples: A list of complex points to send.
         sendnth: Send an input on every `sendnth` clock cycle.
-        data: A list of complex points to send.
-        ms: A list of the meta data to send.
+        in_ms: A list of the meta data to send.
+        defines: Macro definitions (constants) to use in verilog code.
     """
 
-    def __init__(self, name, width, mwidth, sendnth, data, ms, debug):
-        self.width = width
-        self.mwidth = mwidth
-        self.name = name
-        self.ms = ms
-        TestBench.__init__(self, sendnth, data, ms, self.width, self.width, debug)
-        self.executable, inputfiles = generate(self.name, self.width, self.mwidth, debug)
+    def prepare(self):
+        self.executable = generate_nothing_executable(self.name, self.defines)
 
 class TestNothing(unittest.TestCase):
     """
@@ -61,8 +55,12 @@ class TestNothing(unittest.TestCase):
         # Create the test bench
         name = 'basic'
         debug = True
-        self.tb = NothingTestBench(name, self.width, self.mwidth, self.sendnth,
-                                   self.data, self.ms, debug)
+        self.defines = {"DEBUG": debug,
+                        "WIDTH": self.width,
+                        "MWIDTH": self.mwidth,
+                        }
+        self.tb = NothingTestBenchIcarus(name, self.data, self.sendnth, self.ms, self.defines)
+        self.tb.prepare()
 
     def tearDown(self):
         pass
@@ -72,10 +70,10 @@ class TestNothing(unittest.TestCase):
         Test a nothing block.
         """
         steps_rqd = self.n_data * self.sendnth + 1000
-        self.tb.simulate(steps_rqd)
-        self.assertEqual(len(self.tb.output), len(self.data))
+        self.tb.run(steps_rqd)
+        self.assertEqual(len(self.tb.out_samples), len(self.data))
         # Compare data
-        for e, r in zip(self.data, self.tb.output):
+        for e, r in zip(self.data, self.tb.out_samples):
             self.assertAlmostEqual(e.real, r.real, 3)
             self.assertAlmostEqual(e.imag, r.imag, 3)
         # Compare ms

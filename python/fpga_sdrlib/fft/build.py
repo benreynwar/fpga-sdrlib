@@ -11,105 +11,71 @@ from jinja2 import Environment, FileSystemLoader
 
 from fpga_sdrlib import config
 from fpga_sdrlib.conversions import cs_to_dicts
+from fpga_sdrlib.buildutils import copyfile, format_template, make_define_string
 
 logger = logging.getLogger(__name__)
 
 env = Environment(loader=FileSystemLoader(
         os.path.join(config.verilogdir, 'fft')))
 
-def generate(method, N, width, mwidth):
+def get_builddir():
+    fftbuilddir = os.path.join(config.builddir, 'fft')
+    if not os.path.exists(fftbuilddir):
+        os.makedirs(fftbuilddir)
+    return fftbuilddir
+
+def generate_dit_files(fft_length, tf_width):
     """
     Generate the fft files to perform an fft.
     
     Args:
-        N: Length of the FFT.
-        width: Number of bits in a real number.  Complex is twice this.
-        mwidth: Number of bits in data passed through.
+        fft_length: Length of the FFT.
+        tf_width: Number of bits in each real number of each twiddle factor.
     """
-    assert(method in ('icarus', 'xilinx'))
-    logN = math.log(N)/math.log(2)
-    if (logN != int(logN)):
-        raise ValueError("N must be a power of 2.")
-    logN = int(logN)
-    fftbuilddir = os.path.join(config.builddir, 'fft')
-    if not os.path.exists(fftbuilddir):
-        os.makedirs(fftbuilddir)
-    dut_dit_fn = os.path.join(config.builddir, 'fft', 'dut_dit.v')
-    shutil.copyfile(os.path.join(config.verilogdir, 'fft', 'dut_dit.v'),
-                    dut_dit_fn)
-    make_twiddlefactor(N, width)
-    butterfly_fn = make_butterfly(method)
-    inputfiles = ['dit.v']
-    for f in inputfiles:
-        shutil.copyfile(os.path.join(config.verilogdir, 'fft', f),
-                        os.path.join(config.builddir, 'fft', f))
-    executable = "fft_{n}_{x_width}_{tf_width}".format(
-        n=N, x_width=width, tf_width=width)
+    get_builddir()
+    inputfiles = []
+    inputfiles.append(copyfile('fft', 'butterfly.v'))
+    log_fft_length = math.log(fft_length)/math.log(2)
+    if log_fft_length != int(log_fft_length):
+        raise ValueError("fft_length must be a power of two")
+    log_fft_length = int(log_fft_length)
+    # Generate the dit.v file
+    dit_fn = 'dit_{0}'.format(fft_length)
+    inputfiles.append(
+        format_template('fft', 'dit.v.t', dit_fn, {'N': fft_length}))    
+    # Generate twiddle factor file.
+    tf_fn = 'twiddlefactors_{0}'.format(fft_length)
+    vs = [cmath.exp(-i*2j*cmath.pi/fft_length) for i in range(0, fft_length/2)]
+    tfs = cs_to_dicts(vs, tf_width*2, clean1=True)
+    tf_dict = {
+        'N': fft_length,
+        'log_N': log_fft_length,
+        'tf_width': tf_width, 
+        'tfs': tfs,
+        }
+    inputfiles.append(
+        format_template('fft', 'twiddlefactors.v.t', tf_fn, tf_dict))
+    return inputfiles
+
+def generate_dit_executable(name, fft_length, defines): 
+    log_fft_length = math.log(fft_length)/math.log(2)
+    if log_fft_length != int(log_fft_length):
+        raise ValueError("fft_length must be a power of two")
+    log_fft_length = int(log_fft_length)
+    get_builddir()
+    defines['N'] = fft_length
+    defines['LOG_N'] = log_fft_length
+    dut_dit_fn = copyfile('fft', 'dut_dit.v')
+    inputfiles = generate_dit_files(fft_length, defines['WIDTH']/2)
+    executable = "dit_{name}".format(name=name)
     executable = os.path.join(config.builddir, 'fft', executable)
-    inputfiles.append('twiddlefactors_{n}.v'.format(n=N))
-    inputfiles.append(butterfly_fn)
-    inputfiles = [os.path.join(config.builddir, 'fft', f) for f in inputfiles]
     inputfilestr = ' '.join(inputfiles + [dut_dit_fn])
-    cmd = ("iverilog -o {executable} -DN={n} -DX_WDTH={x_width} -DNLOG2={nlog2} "
-           "-DTF_WDTH={tf_width} -DM_WDTH={mwidth} "
-           "{inputfiles} "
-           ).format(executable=executable, n=N, x_width=width, mwidth=mwidth,
-                    tf_width=width, nlog2=logN, inputfiles=inputfilestr)
+    definestr = make_define_string(defines)
+    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+           ).format(executable=executable,
+                    definestr=definestr,
+                    msg_options=config.msg_options,
+                    inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
-    return executable, inputfiles
-
-def make_butterfly(method):
-    """
-    Generates a verilog file for the butterly module.
-    """
-    template_fn = os.path.join('fft', 'butterfly.v.t')
-    output_fn = os.path.join(config.builddir, 'fft', 'butterfly_{0}.v'.format(method))
-    env = Environment(loader=FileSystemLoader(config.verilogdir))
-    template = env.get_template(template_fn)
-    f_out = open(output_fn, 'w')
-    assert(method in ('icarus', 'xilinx'))
-    xilinx = (method == 'xilinx')
-    f_out.write(template.render(xilinx=xilinx))
-    f_out.close()    
-    return output_fn
-           
-def make_twiddlefactor(N, tf_width, template_fn=None, output_fn=None):
-    """
-    Generates a verilog file containing a twiddle factor module from a template file.
-    """
-    if template_fn is None:
-        template_fn = os.path.join('fft', 'twiddlefactors.v.t')
-    if output_fn is None:
-        output_fn = os.path.join(config.builddir, 'fft', 'twiddlefactors_{0}.v'.format(N))
-    env = Environment(loader=FileSystemLoader(config.verilogdir))
-    template = env.get_template(template_fn)
-    Nlog2 = int(math.log(N, 2))
-    vs = [cmath.exp(-i*2j*cmath.pi/N) for i in range(0, N/2)]
-    tfs = cs_to_dicts(vs, tf_width*2, clean1=True)
-    if not os.path.exists(os.path.dirname(output_fn)):
-        os.makedirs(os.path.dirname(output_fn))
-    f_out = open(output_fn, 'w')
-    f_out.write(template.render(tf_width=tf_width, tfs=tfs, Nlog2=Nlog2))    
-    f_out.close()
-    
-def make_qa_dit(n, width, mwidth):
-    """
-    Generates a verilog file to use for QA on FPGA.
-    """
-    logn = int(math.ceil(math.log(n)/math.log(2)))
-    template_fn = 'qa_dit.v.t'
-    output_fn = os.path.join(config.builddir, 'fft',
-                             'qa_dit.v')
-    template = env.get_template(template_fn)
-    if not os.path.exists(os.path.dirname(output_fn)):
-        os.makedirs(os.path.dirname(output_fn))
-    f_out = open(output_fn, 'w')
-    f_out.write(template.render(
-            width=width, mwidth=mwidth, n=n, logn=logn,
-            ))
-    f_out.close()
-    return output_fn
-    
-    
-
+    return executable

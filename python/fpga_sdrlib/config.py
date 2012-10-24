@@ -12,6 +12,11 @@ miscdir = os.path.join(basedir, 'misc')
 verilogdir = os.path.join(basedir, 'verilog')
 builddir = os.path.join(basedir, 'build')
 
+default_sendnth = 4
+default_defines = {"DEBUG": False,
+                   "WIDTH": 32,
+                   "MWIDTH": 1}
+
 msg_width = 32
 msg_length_width = 10
 msg_formatcode_width = 4

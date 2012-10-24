@@ -1,3 +1,4 @@
+// -*- verilog -*-
 // Copyright (c) 2012 Ben Reynwar
 // Released under MIT License (see LICENSE.txt)
 
@@ -12,7 +13,9 @@
  two steps.  This is so, hopefully, less multiply
  blocks can be used.
  */
-/*
+
+`ifndef XILINX
+  
 module MULT18X18S
   (output reg signed [35:0] P,
    input signed [17:0] A,
@@ -29,7 +32,9 @@ module MULT18X18S
        P <= A * B;
 
 endmodule // MULT18X18S
-*/
+
+`endif
+
 module multiply
   #(
     parameter WDTH = 0

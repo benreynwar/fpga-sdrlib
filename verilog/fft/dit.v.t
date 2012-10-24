@@ -580,13 +580,13 @@ module dit
      end
 
    /* Instantiate twiddle factor unit. */
-   twiddlefactors
-     twiddlefactors_0 (
-                       .clk (clk),
-                       .addr (tf_addr),
-                       .addr_nd (tf_addr_nd),
-                       .tf_out (tf)
-                       );
+   twiddlefactors_{{N}}
+     twiddlefactors_inst (
+                          .clk (clk),
+                          .addr (tf_addr),
+                          .addr_nd (tf_addr_nd),
+                          .tf_out (tf)
+                          );
    
    /* Instantiate the generic butterfly unit. */
    butterfly #(

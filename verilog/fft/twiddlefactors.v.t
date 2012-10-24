@@ -1,9 +1,9 @@
 // Copyright (c) 2012 Ben Reynwar
 // Released under MIT License (see LICENSE.txt)
 
-module twiddlefactors (
+module twiddlefactors_{{N}} (
     input  wire                            clk,
-    input  wire [{{Nlog2 - 2}}:0]          addr,
+    input  wire [{{log_N - 2}}:0]          addr,
     input  wire                            addr_nd,
     output reg signed [{{2*tf_width-1}}:0] tf_out
   );
@@ -14,7 +14,7 @@ module twiddlefactors (
         begin
           case (addr)
 			{% for tf in tfs %}
-            {{Nlog2-1}}'d{{tf.i}}: tf_out <= { {{tf.re_sign}}{{tf_width}}'sd{{tf.re}},  {{tf.im_sign}}{{tf_width}}'sd{{tf.im}} };
+            {{log_N-1}}'d{{tf.i}}: tf_out <= { {{tf.re_sign}}{{tf_width}}'sd{{tf.re}},  {{tf.im_sign}}{{tf_width}}'sd{{tf.im}} };
 			{% endfor %}
             default:
               begin

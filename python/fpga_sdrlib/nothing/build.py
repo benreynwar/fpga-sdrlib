@@ -9,7 +9,7 @@ import logging
 from jinja2 import Environment, FileSystemLoader
 
 from fpga_sdrlib import config, b100
-from fpga_sdrlib.buildutils import copyfile, format_template
+from fpga_sdrlib.buildutils import copyfile, format_template, make_define_string
 from fpga_sdrlib.message.build import generate_slicer_files
 
 logger = logging.getLogger(__name__)
@@ -17,41 +17,34 @@ logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader(
         os.path.join(config.verilogdir, 'nothing')))
 
-def generate(name, width, mwidth, debug):
+def generate_nothing_files():
     """
     Generate the files to make the 'nothing' block.
-    
-    Args:
-        width: Number of bits in a complex number.
-        mwidth: Number of bits in meta data.
-        debug: Whether to include debug info in verilog.
     """
     nothing_builddir= os.path.join(config.builddir, 'nothing')
     if not os.path.exists(nothing_builddir):
         os.makedirs(nothing_builddir)
-    dut_nothing_fn = copyfile('nothing', 'dut_nothing.v')
     nothing_fn = copyfile('nothing', 'nothing.v')
     inputfiles = [nothing_fn]
     inputfiles += generate_slicer_files()
-    print(inputfiles)
+    return inputfiles
+
+def generate_nothing_executable(name, defines):
+    nothing_builddir= os.path.join(config.builddir, 'nothing')
+    inputfiles = generate_nothing_files()
+    dut_nothing_fn = copyfile('nothing', 'dut_nothing.v')    
     inputfilestr = ' '.join(inputfiles + [dut_nothing_fn])
     executable = 'nothing_{name}'.format(name=name)
     executable = os.path.join(nothing_builddir, executable)
-    if debug:
-        debugstr = "-DDEBUG"
-    else:
-        debugstr = ""
-    cmd = ("iverilog -o {executable} -DWIDTH={width} -DMWIDTH={mwidth} {debugstr} "
-           "{msg_options} "
-           "{inputfiles}"
-           ).format(width=width, mwidth=mwidth,
-                    executable=executable,
-                    debugstr=debugstr,
+    definestr = make_define_string(defines)
+    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+           ).format(executable=executable,
+                    definestr=definestr,
                     msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
-    return executable, inputfiles
+    return executable
 
 def make_qa_nothing(width, mwidth):
     """

@@ -8,8 +8,7 @@ from fpga_sdrlib import config
 def copyfile(directory, name):
     out_fn = os.path.join(config.builddir, directory, name)
     shutil.copyfile(os.path.join(config.verilogdir, directory, name), out_fn)
-    return out_fn
-                    
+    return out_fn                    
 
 def format_template(directory, template_name, output_name, template_args):
     """
@@ -24,3 +23,12 @@ def format_template(directory, template_name, output_name, template_args):
     f_out.close()    
     return output_fn
 
+def make_define_string(defines):
+    definestrs = []
+    for k, v in defines.items():
+        if v is True or v is False:
+            if v is True:
+                definestrs.append("-D" + k)
+        else:
+            definestrs.append("-D{0}={1}".format(k, v))
+    return ' '.join(definestrs)
