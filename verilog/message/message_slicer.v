@@ -40,7 +40,7 @@ module message_slicer
       for (i=0; i<N_SLICES; i=i+1) begin: LOOP_0
 
          wire [LOG_BUFFER_LENGTH-1:0] shifted_buffer_write_pos;
-         assign shifted_buffer_write_pos = buffer_write_pos + i;
+         assign shifted_buffer_write_pos = buffer_write_pos + N_SLICES - i - 1;
          
          always @ (posedge clk)
            begin
@@ -73,6 +73,7 @@ module message_slicer
           begin
              buffer_full[buffer_read_pos] <= 1'b0;
              out_data <= buffer[WIDTH*(buffer_read_pos+1)-1 -:WIDTH];
+             //$display("Sending the data %d", buffer[WIDTH*(buffer_read_pos+1)-1 -:WIDTH]);
              out_nd <= 1'b1;
              buffer_read_pos <= buffer_read_pos + 1;
           end

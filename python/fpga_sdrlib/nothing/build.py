@@ -42,10 +42,12 @@ def generate(name, width, mwidth, debug):
     else:
         debugstr = ""
     cmd = ("iverilog -o {executable} -DWIDTH={width} -DMWIDTH={mwidth} {debugstr} "
+           "{msg_options} "
            "{inputfiles}"
            ).format(width=width, mwidth=mwidth,
                     executable=executable,
                     debugstr=debugstr,
+                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)

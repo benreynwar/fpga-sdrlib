@@ -12,6 +12,25 @@ miscdir = os.path.join(basedir, 'misc')
 verilogdir = os.path.join(basedir, 'verilog')
 builddir = os.path.join(basedir, 'build')
 
+msg_width = 32
+msg_length_width = 10
+msg_formatcode_width = 4
+msg_modulecode_width = 10
+msg_errorcode_width = 7
+msg_options = []
+msg_options.append("-DMSG_WIDTH={msg_width}")
+msg_options.append("-DMSG_LENGTH_WIDTH={msg_length_width}")
+msg_options.append("-DMSG_FORMATCODE_WIDTH={msg_formatcode_width}")
+msg_options.append("-DMSG_MODULECODE_WIDTH={msg_modulecode_width}")
+msg_options.append("-DMSG_ERRORCODE_WIDTH={msg_errorcode_width}")
+msg_options = ' '.join(msg_options)
+msg_options = msg_options.format(
+    msg_width=msg_width,
+    msg_length_width=msg_length_width,
+    msg_formatcode_width=msg_formatcode_width,
+    msg_modulecode_width=msg_modulecode_width,
+    msg_errorcode_width=msg_errorcode_width)
+
 def setup_logging(level):
     "Utility function for setting up logging."
     ch = logging.StreamHandler()

@@ -12,6 +12,9 @@ import logging
 from fpga_sdrlib import config
 from fpga_sdrlib.nothing.build import generate
 from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib.message import msg_utils
+from fpga_sdrlib.message.msg_codes import parse_packet
+from fpga_sdrlib.conversions import int_to_c
 
 class NothingTestBench(TestBench):
     """
@@ -79,6 +82,19 @@ class TestNothing(unittest.TestCase):
         self.assertEqual(len(self.tb.out_ms), len(self.ms))
         for r, e in zip(self.tb.out_ms, self.ms):
             self.assertEqual(r, e)
+        # Checked passed messages
+        # It should pass back the input data in messages.=
+        packets = msg_utils.stream_to_packets(self.tb.message_stream)
+        data_from_msgs = []
+        for packet in packets:
+            # Expected format of message is "nothing: received 23423423"
+            msg = parse_packet(packet)
+            data_from_msgs.append(int(msg.split()[2]))
+        for r, e in zip(data_from_msgs, self.data):
+            # Convert integers in message into the complex numbers.
+            c = int_to_c(r, self.width/2-1)
+            self.assertAlmostEqual(c, e, 3)
+            
 
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)    

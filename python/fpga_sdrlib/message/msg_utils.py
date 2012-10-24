@@ -1,4 +1,6 @@
-def stream_to_packets(stream, bits_for_length, width):
+from fpga_sdrlib.config import msg_length_width, msg_width
+
+def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width):
     header_shift = pow(2, width-1)
     length_shift1 = pow(2, width-1-bits_for_length)
     length_shift2 = pow(2, bits_for_length)
