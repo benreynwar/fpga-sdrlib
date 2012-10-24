@@ -82,7 +82,7 @@ class TestNothing(unittest.TestCase):
             self.assertEqual(r, e)
         # Checked passed messages
         # It should pass back the input data in messages.=
-        packets = msg_utils.stream_to_packets(self.tb.message_stream)
+        packets = msg_utils.stream_to_packets(self.tb.out_msgs)
         data_from_msgs = []
         for packet in packets:
             # Expected format of message is "nothing: received 23423423"
@@ -90,7 +90,7 @@ class TestNothing(unittest.TestCase):
             data_from_msgs.append(int(msg.split()[2]))
         for r, e in zip(data_from_msgs, self.data):
             # Convert integers in message into the complex numbers.
-            c = int_to_c(r, self.width/2-1)
+            c = int_to_c(r, self.width/2)
             self.assertAlmostEqual(c, e, 3)
             
 

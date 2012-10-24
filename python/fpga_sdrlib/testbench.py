@@ -94,7 +94,7 @@ class TestBenchIcarus(TestBenchBase):
     """
 
     extra_signal_names = []
-    debug_signal_names = ['msg', 'msg_nd']
+    debug_signal_names = ['out_msg', 'out_msg_nd']
     base_signal_names = ['clk', 'rst_n',
                          'in_data', 'in_nd', 'in_m',
                          'out_data', 'out_nd', 'out_m',
@@ -135,8 +135,8 @@ class TestBenchIcarus(TestBenchBase):
             """
             Receive messages.
             """
-            if self.msg_nd:
-                self.out_msgs.append(int(self.msg))
+            if self.out_msg_nd:
+                self.out_msgs.append(int(self.out_msg))
         return run
 
     def get_output(self):

@@ -17,9 +17,9 @@ default_defines = {"DEBUG": False,
                    "WIDTH": 32,
                    "MWIDTH": 1}
 
-msg_width = 32
+msg_width = 33
 msg_length_width = 10
-msg_formatcode_width = 4
+msg_formatcode_width = 5
 msg_modulecode_width = 10
 msg_errorcode_width = 7
 msg_options = []

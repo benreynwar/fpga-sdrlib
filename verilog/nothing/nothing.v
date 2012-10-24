@@ -18,8 +18,8 @@ module nothing
     output reg [MWDTH-1:0]       out_m,
     `ifdef DEBUG
     output reg                   error,
-    output wire [`MSG_WIDTH-1:0] msg,
-    output wire                  msg_nd
+    output wire [`MSG_WIDTH-1:0] out_msg,
+    output wire                  out_msg_nd
     `else
     output reg                   error
     `endif
@@ -27,17 +27,17 @@ module nothing
 
    `ifdef DEBUG
 
-   reg [WDTH*2-1:0]        full_msg;
-   reg                     full_msg_nd;
-   wire                    msg_error;
+   reg [`MSG_WIDTH*2-1:0]        full_msg;
+   reg                           full_msg_nd;
+   wire                          msg_error;
 
-   message_slicer #(2, WDTH, 8, 3) message_slicer_0
+   message_slicer #(2, `MSG_WIDTH, 8, 3) message_slicer_0
      (.clk(clk),
       .rst_n(rst_n),
       .in_data(full_msg),
       .in_nd(full_msg_nd),
-      .out_data(msg),
-      .out_nd(msg_nd),
+      .out_data(out_msg),
+      .out_nd(out_msg_nd),
       .error(msg_error)
       );
    
@@ -48,8 +48,6 @@ module nothing
 
    always @ (posedge clk)
      begin
-        if (msg_nd)
-          //$display("Message out is %d", msg);
         error <= msg_error;
      end
    `endif
@@ -57,17 +55,6 @@ module nothing
    initial
      error <= 1'b0;
 
-   `ifdef DEBUG
-   wire signed [WDTH/2-1:0] original_i;
-   wire signed [WDTH/2-1:0] original_q;
-   wire signed [WDTH/2-2:0] shifted_i;
-   wire signed [WDTH/2-2:0] shifted_q;
-   assign original_i = in_data[WDTH-1 :WDTH/2];
-   assign original_q = in_data[WDTH/2-1 :0];
-   assign shifted_i = original_i >> 1;
-   assign shifted_q = original_q >> 1;
-   `endif
-                              
    always @ (posedge clk)
      begin
    `ifdef DEBUG
@@ -76,7 +63,7 @@ module nothing
              full_msg_nd <= ~full_msg_nd;
              // format is {header, length excluding header, format code, module key, error key}
              // format code is always 0 for now.
-             full_msg <= {1'b1, `MSG_LENGTH_WIDTH'd1, `MSG_FORMATCODE_WIDTH'd0, `MSG_MODULECODE_WIDTH'd0, `MSG_ERRORCODE_WIDTH'd0, 2'b0, shifted_i, shifted_q};
+             full_msg <= {1'b1, `MSG_LENGTH_WIDTH'd1, `MSG_FORMATCODE_WIDTH'd0, `MSG_MODULECODE_WIDTH'd0, `MSG_ERRORCODE_WIDTH'd0, 1'b0, in_data};
           end
    `endif
         out_data <= in_data;

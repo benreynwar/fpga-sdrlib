@@ -5,7 +5,7 @@
 module message_slicer
   #(
     parameter N_SLICES = 2,
-    parameter WIDTH = 32,
+    parameter WIDTH = 33,
     parameter BUFFER_LENGTH = 64,
     parameter LOG_BUFFER_LENGTH = 6
     )

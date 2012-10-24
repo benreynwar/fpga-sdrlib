@@ -10,7 +10,6 @@ import random
 import unittest
 import logging
 
-from fpga_sdrlib.testbench import TestBench
 from fpga_sdrlib.message.build import generate_stream_combiner_executable, generate_slicer_executable, logceil
 from fpga_sdrlib import config
 from fpga_sdrlib.message.msg_utils import stream_to_packets, make_packet_dict
