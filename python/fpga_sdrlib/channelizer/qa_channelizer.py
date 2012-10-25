@@ -12,10 +12,11 @@ import math
 from myhdl import always
 from numpy import fft
 from scipy import signal
-from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
-from fpga_sdrlib.channelizer.build import generate
-from fpga_sdrlib.testbench import TestBench
-from fpga_sdrlib.filterbank.qa_filterbank import scale_taps
+
+from fpga_sdrlib import config
+from fpga_sdrlib.channelizer.build import generate_channelizer_executable
+from fpga_sdrlib.testbench import TestBenchIcarus
+from fpga_sdrlib.filterbank.qa_filterbank import scale_taps, taps_to_start_msgs, FilterbankTestBenchIcarus
 
 def convolve(X, Y):
     """
@@ -30,16 +31,10 @@ def convolve(X, Y):
         ss.append(s)
     return ss
 
-def pychannelizer(flt, data, M):
+def pychannelizer(flts, data, M):
     """
     Implements a pfb channelizer in python.
     """
-    flt = list(flt)
-    if len(data)%M != 0:
-        data = data[:int(len(data)/M)*M]
-    if len(flt)%M != 0:
-        flt = flt + [0] * (M - len(flt)%M)
-    flts = [flt[i::M] for i in range(M)]
     css = [data[i::M] for i in range(M)]
     convolved = [convolve(flts[i], css[i]) for i in range(M)]
     channels = []
@@ -48,36 +43,42 @@ def pychannelizer(flt, data, M):
         channels.append([x for x in filtered])
     return convolved, channels
 
-class ChannelizerTestBench(TestBench):
+class ChannelizerTestBenchIcarus(TestBenchIcarus):
     """
     Helper class for doing testing.
     
     Args:
         name: A name to use with for generated files.
-        width: Bit width of a complex number.
-        mwidth: The bit width of sent meta data.
+        n_chans: The number of channels (must be a power of 2).
+        taps: The taps to use for the channelizer.
+        in_samples: A list of complex points to send.
         sendnth: Send an input on every `sendnth` clock cycle.
-        n_chans: The number of channels to split into.
-        data: A list of complex points to send.
-        ms: A list of the meta data to send.
-        taps: The taps to use for channelizing.
+        in_ms: A list of the meta data to send.
+        defines: Macro definitions (constants) to use in verilog code.
     """
 
     extra_signal_names = ['first_channel']
 
-    def __init__(self, name, width, mwidth, sendnth, n_chans, data, ms, taps):
+    def __init__(self, name, n_chans, taps, in_samples,
+                 sendnth=config.default_sendnth, in_ms=None,
+                 defines=config.default_defines):
         self.logn = math.log(n_chans)/math.log(2)
         if int(self.logn) != self.logn:
             raise ValueError("The number of channels must be a power of two.")
         self.n_chans = n_chans
-        self.width = width
-        self.mwidth = mwidth
         self.name = name
-        self.ms = ms
+        self.in_ms = in_ms
+        self.in_samples = in_samples
         self.taps = taps
-        TestBench.__init__(self, sendnth, data, ms, self.width, self.width)
-        self.executable, inputfiles = generate(self.name, self.n_chans, self.taps, self.width, self.mwidth)
+        self.n_taps = len(taps[0])
+        self.width = defines['WIDTH']
+        start_msgs = taps_to_start_msgs(taps)
+        TestBenchIcarus.__init__(self, name, in_samples, sendnth, in_ms, start_msgs, defines)
         self.drivers.append(self.get_first_channel)
+
+    def prepare(self):
+        self.executable = generate_channelizer_executable(
+            self.name, self.n_chans, self.width, self.n_taps, self.defines)
 
     def get_first_channel(self):
         self.out_fc = []
@@ -118,15 +119,14 @@ def get_channelizer_taps(M, n_taps=100):
     # of overflow.
     chantaps = [taps[i::M] for i in range(M)]
     scaledtaps, tapscalefactor = scale_taps(chantaps)
-    taps = [float(x)/tapscalefactor for x in taps]
-    return taps, maxsum
+    return scaledtaps, tapscalefactor
         
-def get_expected_channelized_data(self, L, freqs, amplitudes):
+def get_expected_channelized_data(fs, L, freqs, amplitudes):
     """
     Get the expected data in each channel.
     """
     def make_data(f, a):
-        t = [float(x)/self.fs for x in  xrange(L)]
+        t = [float(x)/fs for x in  xrange(L)]
         return [a*math.cos(2*math.pi*f*x) + a*1j*math.sin(2*math.pi*f*x)
                 for x in t]
     expected_data = [make_data(f, a) for f, a in zip(freqs, amplitudes)]
@@ -145,7 +145,7 @@ class TestChannelizer(unittest.TestCase):
         self.M = 4
         self.logM = int(math.log(self.M)/math.log(2))
         # The amount of data to send
-        self.n_data = self.M * 200
+        self.n_data = self.M * 30#200
         # Baseband sampling rate
         self.fs = 1000        
         # Input samp rate to channelizer
@@ -165,7 +165,7 @@ class TestChannelizer(unittest.TestCase):
         # How often to send input.
         # For large FFTs this must be larger since the speed scales as MlogM.
         # Otherwise we get an overflow error.
-        self.sendnth = 2
+        self.sendnth = 8
         # Get the input data
         self.data = get_mixed_sinusoids(self.fs, self.n_data, self.freqs, self.amplitudes)
         # Scale the input data to remain in (-1 to 1)
@@ -179,7 +179,18 @@ class TestChannelizer(unittest.TestCase):
         self.ms = [self.myrandint(0, 7) for d in self.data]
         # Create the test bench
         name = 'complex'
-        self.tb = ChannelizerTestBench(name, self.width, self.mwidth, self.sendnth, self.M, self.data, self.ms, self.taps)
+        defines = {"DEBUG": False,
+                   "WIDTH": self.width,
+                   "MWIDTH": self.mwidth}
+        rtaps = []
+        for tt in self.taps:
+            rtaps.append(list(reversed(tt)))
+        self.tb = ChannelizerTestBenchIcarus(name, self.M, rtaps, self.data,
+                                             self.sendnth, self.ms, defines)
+        self.ftb = FilterbankTestBenchIcarus(name, self.M, len(self.taps[0]), self.taps, self.data,
+                                             self.sendnth, self.ms, defines)
+        self.ftb.prepare()
+        self.tb.prepare()
 
     def tearDown(self):
         pass
@@ -189,13 +200,13 @@ class TestChannelizer(unittest.TestCase):
         Test a channelizer.
         """
         steps_rqd = self.n_data * self.sendnth + 1000
-        self.tb.simulate(steps_rqd)
-        received = [x*self.M for x in self.tb.output]
-        skip = int(math.ceil(float(len(self.taps))/self.M-1)*self.M)
+        self.tb.run(steps_rqd)
+        p_convolved, p_final = pychannelizer(self.taps, self.data, self.M)
+        received = [x*self.M for x in self.tb.out_samples]
+        skip = (len(self.taps[0])-1)*self.M
         received = [received[i+skip::self.M] for i in range(self.M)]
         expected = get_expected_channelized_data(
-            self.n_data/self.M, self.freqs, self.amplitudes)
-        p_convolved, p_final = pychannelizer(self.taps, self.data, self.M)
+            self.fs, self.n_data/self.M, self.freqs, self.amplitudes)
         for ed, dd, pd in zip(expected, received, p_final):
             pd = [p*self.tapscale*self.inputscale for p in pd]
             dd = [d*self.tapscale*self.inputscale for d in dd]
@@ -204,10 +215,14 @@ class TestChannelizer(unittest.TestCase):
             self.assertTrue(len(rpd) != 0)
             self.assertTrue(len(ed) != 0)
             self.assertTrue(len(pd) != 0)
+            allowed_dev = 5e-4
             for e, p in zip(ed, rpd):
-                self.assertAlmostEqual(e, p, 3)
+                dev = abs(e-p)
+                self.assertTrue(dev < allowed_dev)
+            allowed_dev = 5e-3
             for d, p in zip(dd, pd):
-                self.assertAlmostEqual(d, p, 3)
+                dev = abs(d-p)
+                self.assertTrue(dev < allowed_dev)
         # Compare ms
         self.assertEqual(len(self.tb.out_ms), len(self.ms))
         for r, e in zip(self.tb.out_ms, self.ms):

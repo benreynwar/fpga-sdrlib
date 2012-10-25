@@ -8,19 +8,24 @@ module channelizer
     parameter LOGN = 3,
     parameter WDTH = 32,
     parameter MWDTH = 1,
-    parameter FLTLEN = 10
+    parameter FLTLEN = 10,
+    parameter LOG_FLTLEN = 4
     )
    (
-    input wire             clk,
-    input wire             rst_n,
-    input wire [WDTH-1:0]  in_data,
-    input wire             in_nd,
-    input wire [MWDTH-1:0] in_m, 
-    output reg [WDTH-1:0]  out_data,
-    output reg             out_nd,
-    output reg [MWDTH-1:0] out_m, 
-    output wire            error,
-    output reg             first_channel
+    input wire                  clk,
+    input wire                  rst_n,
+    input wire [WDTH-1:0]       in_data,
+    input wire                  in_nd,
+    input wire [MWDTH-1:0]      in_m,
+    input wire [`MSG_WIDTH-1:0] in_msg,
+    input wire                  in_msg_nd,
+    output reg [WDTH-1:0]       out_data,
+    output reg                  out_nd,
+    output reg [MWDTH-1:0]      out_m,
+    output reg [`MSG_WIDTH-1:0] out_msg,
+    output reg                  out_msg_nd,
+    output wire                 error,
+    output reg                  first_channel
     );
    
    wire                   filtered_nd;
@@ -47,12 +52,14 @@ module channelizer
           end
      end
 
-   filterbank_ccf #(N, LOGN, WDTH, MWDTH, FLTLEN) filterbank_ccf_i
+   filterbank_ccf #(N, LOGN, WDTH, MWDTH, FLTLEN, LOG_FLTLEN) filterbank_ccf_i
      (.clk(clk),
       .rst_n(rst_n),
       .in_data(in_data),
       .in_nd(in_nd),
       .in_m(in_m),
+      .in_msg(in_msg),
+      .in_msg_nd(in_msg_nd),
       .out_data(filtered_data),
       .out_nd(filtered_nd),
       .out_m(filtered_m),

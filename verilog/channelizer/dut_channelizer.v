@@ -7,21 +7,28 @@
 module dut_channelizer;
    reg                   clk;
    reg                   rst_n;
-   reg [`WDTH-1:0]       in_data;
+   reg [`WIDTH-1:0]      in_data;
    reg                   in_nd;
-   reg [`MWDTH-1:0]      in_m;
-   wire [`WDTH-1:0]      out_data;
+   reg [`MWIDTH-1:0]     in_m;
+   reg [`MSG_WIDTH-1:0]  in_msg;
+   reg                   in_msg_nd;                  
+   wire [`WIDTH-1:0]     out_data;
    wire                  out_nd;
-   wire [`MWDTH-1:0]     out_m;
+   wire [`MWIDTH-1:0]    out_m;
+   wire [`MSG_WIDTH-1:0] out_msg;
+   wire                  out_msg_nd;
    wire                  error;
    wire                  first_channel;
    
    initial begin
-	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m);
-	  $to_myhdl(out_data, out_nd, out_m, error, first_channel);
+	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m, in_msg, in_msg_nd);
+	  $to_myhdl(out_data, out_nd, out_m, out_msg, out_msg_nd, error, first_channel);
    end
 
-   channelizer #(`N, `LOGN, `WDTH, `MWDTH, `FLTLEN) dut
-     (clk, rst_n, in_data, in_nd, in_m, out_data, out_nd, out_m, error, first_channel);
+   channelizer #(`N, `LOG_N, `WIDTH, `MWIDTH, `FLTLEN, `LOG_FLTLEN) dut
+     (clk, rst_n,
+      in_data, in_nd, in_m, in_msg, in_msg_nd, 
+      out_data, out_nd, out_m, out_msg, out_msg_nd,
+      error, first_channel);
    
 endmodule  
