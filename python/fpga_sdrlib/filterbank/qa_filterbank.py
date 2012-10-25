@@ -28,6 +28,15 @@ def convolve(data, taps):
         out.append(v)
     return out
 
+def taps_to_start_msgs(taps):
+    # First block has header flag set.
+    start_msgs = [pow(2, config.msg_width-1)]
+    # Following blocks contain taps.
+    for flt in taps:
+        for tap in flt:
+            start_msgs.append(f_to_int(tap, (config.msg_width-1)/2, clean1=True))
+    return start_msgs
+
 class FilterbankTestBenchIcarus(TestBenchIcarus):
     """
     Helper class for doing testing.
@@ -36,6 +45,7 @@ class FilterbankTestBenchIcarus(TestBenchIcarus):
         name: A name to use with for generated files.
         n_filters: The number of filters.
         filter_length: The length of the filters.
+        taps: A list of list of taps to set the filters with.
         in_samples: A list of complex points to send.
         sendnth: Send an input on every `sendnth` clock cycle.
         in_ms: A list of the meta data to send.
@@ -47,8 +57,9 @@ class FilterbankTestBenchIcarus(TestBenchIcarus):
     def __init__(self, name, n_filters, filter_length, taps, in_samples,
                  sendnth=config.default_sendnth,
                  in_ms=None, defines=config.default_defines):
+        start_msgs = taps_to_start_msgs(taps)
         super(FilterbankTestBenchIcarus, self).__init__(name, in_samples, sendnth,
-                                                 in_ms, defines)
+                                                 in_ms, start_msgs, defines)
         self.n_filters = n_filters
         self.filter_length = filter_length
         self.taps = taps
@@ -62,46 +73,6 @@ class FilterbankTestBenchIcarus(TestBenchIcarus):
     def prepare(self):
         self.executable = generate_filterbank_executable(
             self.name, self.n_filters, self.filter_length, self.defines)
-
-    def prerun(self):
-        self.first = True
-        self.done_header = False
-        self.doing_prerun = True
-        self.which_filter = 0
-        self.which_tap = 0
-        @always(self.clk.posedge)
-        def run():
-            """
-            Sends a reset signal at start.
-            The loads taps in.
-            """
-            if self.first:
-                self.first = False
-                self.rst_n.next = 0
-            else:
-                self.rst_n.next = 1
-                if not self.done_header:
-                    # Set highest bit.
-                    msg = pow(2, config.msg_width-1)
-                    self.in_msg.next = msg
-                    self.in_msg_nd.next = 1
-                    self.done_header = True
-                else:
-                    if self.which_filter == self.n_filters:
-                        self.in_msg_nd.next = 0
-                        self.doing_prerun = False
-                    else:
-                        msg = f_to_int(
-                            self.taps[self.which_filter][self.which_tap],
-                            (config.msg_width-1)/2, clean1=True)
-                        self.in_msg.next = msg
-                        self.in_msg_nd.next = 1
-                        self.which_tap += 1
-                        if self.which_tap == self.filter_length:
-                            self.which_tap = 0
-                            self.which_filter += 1
-        return run
-        
 
     def get_first_filter(self):
         @always(self.clk.posedge)

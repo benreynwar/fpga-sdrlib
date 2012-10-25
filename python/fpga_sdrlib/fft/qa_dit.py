@@ -35,9 +35,9 @@ class DITTestBenchIcarus(TestBenchIcarus):
     extra_signal_names = ['first']
 
     def __init__(self, name, fft_length, in_samples, sendnth=config.default_sendnth,
-                 in_ms=None, defines=config.default_defines):
+                 in_ms=None, start_msgs=None, defines=config.default_defines):
         super(DITTestBenchIcarus, self).__init__(name, in_samples, sendnth,
-                                                 in_ms, defines)
+                                                 in_ms, defines=defines)
         self.fft_length = fft_length
         
     def prepare(self):
@@ -96,7 +96,7 @@ class TestFFT(unittest.TestCase):
         defines = {"DEBUG": False,
                    "WIDTH": width,
                    "MWIDTH": mwidth}
-        tb = DITTestBenchIcarus('standard', N, data, sendnth, ms, defines)
+        tb = DITTestBenchIcarus('standard', N, data, sendnth, ms, defines=defines)
         tb.prepare()
         tb.run(steps_rqd)
 

@@ -12,17 +12,15 @@ module nothing
     input wire                   rst_n,
     input wire [WDTH-1:0]        in_data,
     input wire                   in_nd,
-    input wire [MWDTH-1:0]       in_m, 
+    input wire [MWDTH-1:0]       in_m,
     output reg [WDTH-1:0]        out_data,
     output reg                   out_nd,
     output reg [MWDTH-1:0]       out_m,
     `ifdef DEBUG
-    output reg                   error,
     output wire [`MSG_WIDTH-1:0] out_msg,
-    output wire                  out_msg_nd
-    `else
-    output reg                   error
+    output wire                  out_msg_nd,
     `endif
+    output reg                   error
     );
 
    `ifdef DEBUG

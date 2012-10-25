@@ -60,10 +60,17 @@ def get_usrp_output(n):
 class TestBenchBase(object):
     """
     Defines the interface for a test bench to test a module.
+
+    Args:
+        in_samples: The complex numbers to send.
+        in_ms: Meta data to send.
+        start_msgs: Messages to send before sending the samples.
+        defines: Preprocessor macro definitions.
     """
 
-    def __init__(self, in_samples, in_ms=None, defines=config.default_defines):
+    def __init__(self, in_samples, in_ms=None, start_msgs=None, defines=config.default_defines):
         self.in_samples = in_samples
+        self.start_msgs = start_msgs
         if in_ms is not None:
             assert(len(in_samples) == len(in_ms))
         else:
@@ -94,24 +101,23 @@ class TestBenchIcarus(TestBenchBase):
     """
 
     extra_signal_names = []
-    debug_signal_names = ['out_msg', 'out_msg_nd']
     base_signal_names = ['clk', 'rst_n',
-                         'in_data', 'in_nd', 'in_m',
-                         'out_data', 'out_nd', 'out_m',
+                         'in_data', 'in_nd', 'in_m', 'in_msg', 'in_msg_nd',
+                         'out_data', 'out_nd', 'out_m', 'out_msg', 'out_msg_nd',
                          'error']
 
     def __init__(self, name, in_samples, sendnth=config.default_sendnth,
-                 in_ms=None, defines=config.default_defines):
+                 in_ms=None, start_msgs=None, defines=config.default_defines):
         super(TestBenchIcarus, self).__init__(in_samples, in_ms, defines)
         debug = ("DEBUG" in defines) and defines["DEBUG"]
         self.in_width = defines["WIDTH"]
         self.out_width = defines["WIDTH"]
         self.sendnth = sendnth
         self.name = name
+        self.defines = defines
+        self.start_msgs = start_msgs
         # The MyHDL Signals
         self.signal_names = self.extra_signal_names + self.base_signal_names
-        if debug:
-            self.signal_names += self.debug_signal_names
         for sn in self.signal_names:
             if sn.endswith('_n'):
                 setattr(self, sn, Signal(1))
@@ -176,22 +182,6 @@ class TestBenchIcarus(TestBenchBase):
         del dut
         self.out_messages = stream_to_packets(self.out_msgs)
 
-    def prerun(self):
-        self.first = True
-        self.doing_prerun = True
-        @always(self.clk.posedge)
-        def run():
-            """
-            Sends a reset signal at start.
-            """
-            if self.first:
-                self.first = False
-                self.rst_n.next = 0
-            else:
-                self.doing_prerun = False
-                self.rst_n.next = 1
-        return run
-
     def send_input(self):
         self.count = 0
         self.first = True
@@ -214,3 +204,30 @@ class TestBenchIcarus(TestBenchBase):
                     self.in_nd.next = 0
                     self.count += 1
         return run
+
+    def prerun(self):
+        self.first = True
+        self.done_header = False
+        self.doing_prerun = True
+        self.msg_pos = 0
+        @always(self.clk.posedge)
+        def run():
+            """
+            Sends a reset signal at start.
+            The loads taps in.
+            """
+            if self.first:
+                self.first = False
+                self.rst_n.next = 0
+            else:
+                self.rst_n.next = 1
+                if self.start_msgs and self.msg_pos < len(self.start_msgs):
+                    self.in_msg.next = self.start_msgs[self.msg_pos]
+                    self.in_msg_nd.next = 1
+                    self.msg_pos += 1
+                else:
+                    self.doing_prerun = False
+                    self.in_msg_nd.next = 0
+        return run
+        
+

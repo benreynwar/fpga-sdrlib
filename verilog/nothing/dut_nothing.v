@@ -10,27 +10,23 @@ module dut_nothing;
    reg [`WIDTH-1:0]      in_data;
    reg                   in_nd;
    reg [`MWIDTH-1:0]     in_m;
+   reg [`MSG_WIDTH-1:0]  in_msg;
+   reg                   in_msg_nd;
    wire [`WIDTH-1:0]     out_data;
    wire                  out_nd;
    wire [`MWIDTH-1:0]    out_m;
-   wire                  error;
-`ifdef DEBUG
-   wire [`MSG_WIDTH-1:0]     out_msg;
+   wire [`MSG_WIDTH-1:0] out_msg;
    wire                  out_msg_nd;
-`endif
+   wire                  error;
 
    initial begin
-	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m);
-   `ifdef DEBUG
-      $to_myhdl(out_data, out_nd, out_m, error, out_msg, out_msg_nd);
-   `else
-	  $to_myhdl(out_data, out_nd, out_m, error);
-      `endif
+	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m, in_msg, in_msg_nd);
+      $to_myhdl(out_data, out_nd, out_m, out_msg, out_msg_nd, error);
    end
 
    `ifdef DEBUG
    nothing #(`WIDTH, `MWIDTH) dut
-     (clk, rst_n, in_data, in_nd, in_m, out_data, out_nd, out_m, error, out_msg, out_msg_nd);
+     (clk, rst_n, in_data, in_nd, in_m, out_data, out_nd, out_m, out_msg, out_msg_nd, error);
    `else
    nothing #(`WIDTH, `MWIDTH) dut
      (clk, rst_n, in_data, in_nd, in_m, out_data, out_nd, out_m, error);

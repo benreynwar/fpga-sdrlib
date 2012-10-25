@@ -59,7 +59,7 @@ class TestNothing(unittest.TestCase):
                         "WIDTH": self.width,
                         "MWIDTH": self.mwidth,
                         }
-        self.tb = NothingTestBenchIcarus(name, self.data, self.sendnth, self.ms, self.defines)
+        self.tb = NothingTestBenchIcarus(name, self.data, self.sendnth, self.ms, defines=self.defines)
         self.tb.prepare()
 
     def tearDown(self):
