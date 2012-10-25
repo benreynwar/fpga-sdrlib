@@ -13,9 +13,9 @@ import logging
 
 from myhdl import always
 
-from fpga_sdrlib.conversions import c_to_int, cs_to_int, int_to_c, int_to_cs
-from fpga_sdrlib.filterbank.build import generate
-from fpga_sdrlib.testbench import TestBench
+from fpga_sdrlib.conversions import f_to_int
+from fpga_sdrlib.filterbank.build import generate_filterbank_executable
+from fpga_sdrlib.testbench import TestBenchIcarus
 from fpga_sdrlib import config
 
 def convolve(data, taps):
@@ -28,28 +28,80 @@ def convolve(data, taps):
         out.append(v)
     return out
 
-class FilterbankTestBench(TestBench):
+class FilterbankTestBenchIcarus(TestBenchIcarus):
     """
     Helper class for doing testing.
     
     Args:
-        name: A name to use for generated files.
-        width: Bit width of a complex number.
+        name: A name to use with for generated files.
+        n_filters: The number of filters.
+        filter_length: The length of the filters.
+        in_samples: A list of complex points to send.
         sendnth: Send an input on every `sendnth` clock cycle.
-        data: A list of complex points to send.
-        chantaps: The taps to use for channelizing.
+        in_ms: A list of the meta data to send.
+        defines: Macro definitions (constants) to use in verilog code.
     """
 
-    extra_signal_names = ['first_filter']
+    extra_signal_names = ['first_filter', 'in_msg', 'in_msg_nd']
 
-    def __init__(self, name, width, mwidth, sendnth, data, ms, chantaps):
-        self.width = width
-        self.chantaps = chantaps
-        TestBench.__init__(self, sendnth, data, ms, self.width, self.width)
-        outputdir = os.path.join(config.builddir, 'filterbank')
-        self.executable, inputfiles = generate(name, chantaps, width, mwidth)
+    def __init__(self, name, n_filters, filter_length, taps, in_samples,
+                 sendnth=config.default_sendnth,
+                 in_ms=None, defines=config.default_defines):
+        super(FilterbankTestBenchIcarus, self).__init__(name, in_samples, sendnth,
+                                                 in_ms, defines)
+        self.n_filters = n_filters
+        self.filter_length = filter_length
+        self.taps = taps
+        # Check that there are the correct number of taps.
+        assert(len(taps) == n_filters)
+        for tt in taps:
+            assert(len(tt) == filter_length)
         self.out_ff = []
         self.drivers.append(self.get_first_filter)
+        
+    def prepare(self):
+        self.executable = generate_filterbank_executable(
+            self.name, self.n_filters, self.filter_length, self.defines)
+
+    def prerun(self):
+        self.first = True
+        self.done_header = False
+        self.doing_prerun = True
+        self.which_filter = 0
+        self.which_tap = 0
+        @always(self.clk.posedge)
+        def run():
+            """
+            Sends a reset signal at start.
+            The loads taps in.
+            """
+            if self.first:
+                self.first = False
+                self.rst_n.next = 0
+            else:
+                self.rst_n.next = 1
+                if not self.done_header:
+                    # Set highest bit.
+                    msg = pow(2, config.msg_width-1)
+                    self.in_msg.next = msg
+                    self.in_msg_nd.next = 1
+                    self.done_header = True
+                else:
+                    if self.which_filter == self.n_filters:
+                        self.in_msg_nd.next = 0
+                        self.doing_prerun = False
+                    else:
+                        msg = f_to_int(
+                            self.taps[self.which_filter][self.which_tap],
+                            (config.msg_width-1)/2, clean1=True)
+                        self.in_msg.next = msg
+                        self.in_msg_nd.next = 1
+                        self.which_tap += 1
+                        if self.which_tap == self.filter_length:
+                            self.which_tap = 0
+                            self.which_filter += 1
+        return run
+        
 
     def get_first_filter(self):
         @always(self.clk.posedge)
@@ -97,6 +149,7 @@ class TestFilterbank(unittest.TestCase):
             [0, 0, 0.5, 0.5], 
             ]
         n_filters = len(taps)
+        filter_length = len(taps[0])
         # Amount of data to send to every filter.
         n_data = 10
         # Define the input
@@ -112,11 +165,15 @@ class TestFilterbank(unittest.TestCase):
         # Expected first filter signals
         ffs = ([1] + [0]*(n_filters-1))*n_data
         # Create the test bench
-        tb = FilterbankTestBench('simpletaps', width, mwidth, sendnth, data, ms, taps)
-        tb.simulate(steps_rqd)
+        defines = {"DEBUG": False,
+                   "WIDTH": width,
+                   "MWIDTH": mwidth}
+        tb = FilterbankTestBenchIcarus('simpletaps', n_filters, filter_length, taps, data, sendnth, ms, defines)
+        tb.prepare()
+        tb.run(steps_rqd)
         # Compare to expected output
         input_streams = [data[i::n_filters] for i in range(n_filters)]
-        received = [tb.output[i::n_filters] for i in range(n_filters)]
+        received = [tb.out_samples[i::n_filters] for i in range(n_filters)]
         expected = [convolve(d,t) for d,t in zip(input_streams, taps)]
         for rs, es in zip(received, expected):
             for r, e in zip(rs, es):
@@ -131,7 +188,7 @@ class TestFilterbank(unittest.TestCase):
             self.assertEqual(r, e)
         
 
-    def atest_medium(self):
+    def test_medium(self):
         """
         Test with some simple input and taps.
         """
@@ -148,15 +205,21 @@ class TestFilterbank(unittest.TestCase):
             [0.4, 0.4, 0.1], 
             [0, 0.7, 0.3], 
             ]
+        n_filters = len(taps)
+        filter_length = len(taps[0])
         width = 32
         sendnth = 2
         steps_rqd = 20 * sendnth + 1000
         # Create the test bench
-        tb = FilterbankTestBench('mediumtaps', width, mwidth, sendnth, data, ms, taps)
-        tb.simulate(steps_rqd)
+        defines = {"DEBUG": False,
+                   "WIDTH": width,
+                   "MWIDTH": mwidth}
+        tb = FilterbankTestBenchIcarus('simpletaps', n_filters, filter_length, taps, data, sendnth, ms, defines)
+        tb.prepare()
+        tb.run(steps_rqd)
         # Compare to expected output
         n_filters = len(taps)
-        received = [tb.output[i::n_filters] for i in range(n_filters)]
+        received = [tb.out_samples[i::n_filters] for i in range(n_filters)]
         input_streams = [data[i::n_filters] for i in range(n_filters)]
         expected = [convolve(d,t) for d,t in zip(input_streams, taps)]
         for rs, es in zip(received, expected):
@@ -171,14 +234,14 @@ class TestFilterbank(unittest.TestCase):
         for r, e in zip(tb.out_ff, ffs):
             self.assertEqual(r, e)
 
-    def atest_randominput(self):
+    def test_randominput(self):
         """
         Test a filterbank with random data and taps.
         """
-        n_filters = 5
-        n_taps = 10
+        n_filters = 2
+        n_taps = 3
         # Amount of data to send to every filter.
-        n_data = 50
+        n_data = 4#50
         # Send a new input every sendnth clock cycles.
         sendnth = 2
         # Width of a complex number
@@ -196,9 +259,13 @@ class TestFilterbank(unittest.TestCase):
         chantaps, tapsscalefactor = scale_taps(taps)
         steps_rqd = n_data * n_filters * sendnth + 1000
         # Create the test bench
-        tb = FilterbankTestBench('randomtaps', width, mwidth, sendnth, data, ms, chantaps)
-        tb.simulate(steps_rqd)
-        received = [tb.output[i::n_filters] for i in range(n_filters)]
+        defines = {"DEBUG": False,
+                   "WIDTH": width,
+                   "MWIDTH": mwidth}
+        tb = FilterbankTestBenchIcarus('simpletaps', n_filters, n_taps, chantaps, data, sendnth, ms, defines)
+        tb.prepare()
+        tb.run(steps_rqd)
+        received = [tb.out_samples[i::n_filters] for i in range(n_filters)]
         input_streams = [data[i::n_filters] for i in range(n_filters)]
         expected = [convolve(d,t) for d,t in zip(input_streams, chantaps)]
         for rs, es in zip(received, expected):

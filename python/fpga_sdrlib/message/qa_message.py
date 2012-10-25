@@ -304,17 +304,17 @@ class TestMessageStreamCombiner(unittest.TestCase):
         sendnth = 4
         buffer_length = 64
         log_buffer_length = logceil(buffer_length)
-        n_data = 20
+        n_data = 10
         data = []
         expected_data = []
         mfactor = pow(2, width)
         for i in range(n_data):
-            m = 1
+            m = pow(mfactor, n_slices-1)
             t = 0
             for s in range(n_slices):
                 d = self.myrandint(0, mfactor-1)
                 t += d * m
-                m = m * mfactor
+                m = m / mfactor
                 expected_data.append(d)
             data.append(t)
         # How many steps are required to simulate the data.

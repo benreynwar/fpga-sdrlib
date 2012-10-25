@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from fpga_sdrlib import config
 from fpga_sdrlib.conversions import cs_to_dicts
 from fpga_sdrlib.buildutils import copyfile, format_template, make_define_string
+from fpga_sdrlib.math.build import generate_math_files
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def generate_dit_files(fft_length, tf_width):
         tf_width: Number of bits in each real number of each twiddle factor.
     """
     get_builddir()
-    inputfiles = []
+    inputfiles = generate_math_files()
     inputfiles.append(copyfile('fft', 'butterfly.v'))
     log_fft_length = math.log(fft_length)/math.log(2)
     if log_fft_length != int(log_fft_length):

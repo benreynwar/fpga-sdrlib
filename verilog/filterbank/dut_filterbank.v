@@ -7,26 +7,30 @@
 module dut_filterbank_ccf;
    reg                   clk;
    reg                   rst_n;
-   reg [`WDTH-1:0]       in_data;
+   reg [`WIDTH-1:0]       in_data;
    reg                   in_nd;
-   reg [`MWDTH-1:0]      in_m;
-   wire [`WDTH-1:0]      out_data;
+   reg [`MWIDTH-1:0]      in_m;
+   reg                   in_msg_nd;
+   reg [`MSG_WIDTH-1:0]  in_msg;
+   wire [`WIDTH-1:0]      out_data;
    wire                  out_nd;
-   wire [`MWDTH-1:0]     out_m;
+   wire [`MWIDTH-1:0]     out_m;
    wire                  first_filter;
    wire                  error;
    
    initial begin
-	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m);
+	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m, in_msg_nd, in_msg);
 	  $to_myhdl(out_data, out_nd, out_m, first_filter, error);
    end
 
-   filterbank_ccf #(`N, `ADDRLEN, `WDTH, `MWDTH, `FLTLEN) dut
+   filterbank_ccf #(`N, `LOG_N, `WIDTH, `MWIDTH, `FLTLEN, `LOG_FLTLEN) dut
      (.clk(clk),
       .rst_n(rst_n),
       .in_data(in_data),
       .in_nd(in_nd),
       .in_m(in_m),
+      .in_msg_nd(in_msg_nd),
+      .in_msg(in_msg),
       .out_data(out_data),
       .out_nd(out_nd),
       .out_m(out_m),

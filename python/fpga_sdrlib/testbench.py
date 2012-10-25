@@ -118,14 +118,15 @@ class TestBenchIcarus(TestBenchBase):
             else:
                 setattr(self, sn, Signal(0))
         # Set the MyHDL drivers
-        self.drivers = [self.clk_driver, self.get_output, self.check_error, self.send_input]
+        self.drivers = [self.clk_driver, self.get_output, self.check_error,
+                        self.send_input, self.prerun]
         if debug:
             self.drivers.append(self.get_message_stream)
 
     def clk_driver(self):
         @always(delay(1))
         def run():
-            """ Drives the clock. """
+            """ Drives the clock."""
             self.clk.next = not self.clk
         return run
 
@@ -174,7 +175,22 @@ class TestBenchIcarus(TestBenchBase):
         dut.__del__()
         del dut
         self.out_messages = stream_to_packets(self.out_msgs)
-    
+
+    def prerun(self):
+        self.first = True
+        self.doing_prerun = True
+        @always(self.clk.posedge)
+        def run():
+            """
+            Sends a reset signal at start.
+            """
+            if self.first:
+                self.first = False
+                self.rst_n.next = 0
+            else:
+                self.doing_prerun = False
+                self.rst_n.next = 1
+        return run
 
     def send_input(self):
         self.count = 0
@@ -186,12 +202,7 @@ class TestBenchIcarus(TestBenchBase):
             Sends input to our DUT (design-under-test) and
             receives output.
             """
-            if self.first:
-                # Reset on first input.
-                self.first = False
-                self.rst_n.next = 0
-            else:
-                self.rst_n.next = 1
+            if not self.doing_prerun:
                 # Send input.
                 if self.count >= self.sendnth and self.datapos < len(self.in_samples):
                     self.in_data.next = c_to_int(self.in_samples[self.datapos], self.in_width/2)

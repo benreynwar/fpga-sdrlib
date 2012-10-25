@@ -85,8 +85,8 @@ def sint_to_int(si, width):
     else:
         return si + pow(2, width)
 
-def f_to_int(f, width):
-    return sint_to_int(f_to_sint(f, width), width)
+def f_to_int(f, width, clean1=False):
+    return sint_to_int(f_to_sint(f, width, clean1), width)
 
 def sint_to_f(si, width):
     maxint = pow(2, width-1)-1

@@ -2,28 +2,6 @@
 // Copyright (c) 2012 Ben Reynwar
 // Released under MIT License (see LICENSE.txt)
 
-module multiplier
-  #(
-    parameter WDTH = 16
-    )
-   (
-    input wire clk,
-    input wire signed [WDTH-1:0] x,
-    input wire signed [WDTH-1:0] y,
-    output wire [WDTH-1:0] z
-    );
-   
-   wire signed [2*WDTH-1:0] multed;
-
-   assign z = multed >>> WDTH-1; 
-
-   always @ (posedge clk)
-     begin
-        multed <= x*y;
-     end
-
-endmodule
-
 module summult 
   #(
     parameter WDTH = 16,
@@ -43,75 +21,63 @@ module summult
     output reg                overflow
     );
 
+   wire signed [WDTH-1:0]     x_re_y [N-1:0];
+   wire signed [WDTH-1:0]     x_im_y [N-1:0];
    // When multiplying two signed numbers of width N the
    // required width of the result is 2N-1
-   reg signed [2*WDTH-1:0]           out_data_re;
-   reg signed [2*WDTH-1:0]           out_data_im;
-   wire signed [2*WDTH-1:0]          shifted_re;
-   wire signed [2*WDTH-1:0]          shifted_im;
-   assign shifted_re = out_data_re >>> WDTH-1; 
-   assign shifted_im = out_data_im >>> WDTH-1;
-   assign out_data = {shifted_re[WDTH-1:0], shifted_im[WDTH-1:0]};
-   
-   {{inputassigns}}
+   reg signed [WDTH-1:0]      out_data_re;
+   reg signed [WDTH-1:0]      out_data_im;
+   reg [1:0]                  p_nd;
+   reg [MWDTH-1:0]            p_m[1:0];           
+   assign out_data = {out_data_re, out_data_im};
    
    initial
      begin
+        p_nd <= 2'b0;
         out_nd <= 1'b0;
         overflow <= 1'b0;
-        counter <= {SADDRLEN {1'b0}};
      end
+   genvar i;
+   generate
+      for (i=0; i<N; i=i+1) begin: loop_0
+         wire signed [WDTH-1:0]     x_re;
+         wire signed [WDTH-1:0]     x_im;
+         wire signed [WDTH-1:0]     y;
+    
+         assign x_re = in_xs[WDTH*(2*(i+1))-1 -:WDTH];
+         assign x_im = in_xs[WDTH*(2*(i+1)-1)-1 -:WDTH];
+         assign y = in_ys[WDTH*(i+1)-1 -:WDTH];
 
-   // Create multipliers
-   {% for i in mult_is %}
-     multiplier #(WDTH) multiplier_{{i}} (clk, mult_x_{{i}}, mult_y_{{i}}, mult_z_{{i}}); 
-   {% endfor %}
-   
+         multiply #(WDTH) mult_inst0 (clk, rst_n, x_re, y, x_re_y[i]);
+         multiply #(WDTH) mult_inst1 (clk, rst_n, x_im, y, x_im_y[i]);
+
+      end
+   endgenerate
+
    always @ (posedge clk)
      if (~rst_n)
        begin
+          p_nd <= 2'b0;
           out_nd <= 1'b0;
           overflow <= 1'b0;
-          s <= {SADDRLEN {1'b0}};
        end
      else
        begin
-          if (in_nd)
+          p_nd[0] <= in_nd;
+          p_nd[1] <= p_nd[0];
+          out_nd <= p_nd[1];
+          p_m[0] <= in_m;
+          p_m[1] <= p_m[0];
+          out_m <= p_m[1];
+          // The output should be ready from the multiplier.
+          if (p_nd[1])
             begin
-               s <= {SADDRLEN {1'b0}};
-               out_m <= in_m;
-               {% for i, m in all_ms.0 %}
-                 mult_x_{{2*m}} <= in_xs[2*WDTH*{{i}}-1 -:WDTH];
-                 mult_x_{{2*m+1}} <= in_xs[2*WDTH*{{i}}-1-WDTH -:WDTH];
-               {% endfor %}
-            end
-          if (SADDRLEN == S)
-            begin
-               out_nd <= 1'b1;
-               s <= s+1;
-            end
-          else if (SADDRLEN == S+1)
-            out_nd <= 1'b0;
-          else
-            begin
-               sum_re <= sum_re {% for i in re_is %} + mult_z{{i}} {% for each %}
-            end
-               //out_data_re <= in_xs[WDTH*(2*N-0)-1: WDTH*(2*N-1)] * in_ys[WDTH*N-1] + ...
+               //$display("Out data is %d %d", {{real_sum}}, {{imag_sum}});
+               //out_data_re <= x_re_y[0] + x_re_y[1] + ...
                out_data_re <= {{real_sum}};
-               //out_data_im <= in_xs[WDTH*(2*N-1)-1: WDTH*(2*N-2)] * in_ys[WDTH*N-1] + ...
+               //out_data_re <= x_im_y[0] + x_im_y[1] + ...
                out_data_im <= {{imag_sum}};
-               //$display("in_xs is %d", in_xs);
-               //$display("in_xs is (%d %d) (%d %d) (%d %d) (%d %d)", in_x0_re, in_x0_im, in_x1_re, in_x1_im, in_x2_re, in_x2_im, in_x3_re, in_x3_im);
-               //$display("in_ys is %d %d %d %d", in_y0, in_y1, in_y2, in_y3);
-               //$display("in_xs is (%d %d) (%d %d) (%d %d)", in_x0_re, in_x0_im, in_x1_re, in_x1_im, in_x2_re, in_x2_im);
-               //$display("in_ys is %d %d %d", in_y0, in_y1, in_y2);
-               //$display("in_xs is (%d %d) (%d %d)", in_x0_re, in_x0_im, in_x1_re, in_x1_im);
-               //$display("in_ys is %d %d", in_y0, in_y1);
-               //$display("out data is %d %d", shifted_re, shifted_im);
-               //$display("out data is %d", out_data);
             end
-          else
-            out_nd <= 1'b0;
        end
   
 endmodule
