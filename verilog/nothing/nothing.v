@@ -38,6 +38,20 @@ module nothing
       .out_nd(out_msg_nd),
       .error(msg_error)
       );
+
+   // Get shifted data.
+   wire signed [WDTH/2-1:0]      in_data_re;
+   assign in_data_re = in_data[WDTH-1:WDTH/2];
+   wire signed [WDTH/2-1:0]      in_data_im;
+   assign in_data_im = in_data[WDTH/2-1:0];
+   wire signed [(`MSG_WIDTH-1)/2-1:0]   in_data_re_shifted;
+   assign in_data_re_shifted = in_data_re >> `MSG_SHIFT;
+   wire signed [(`MSG_WIDTH-1)/2-1:0]   in_data_im_shifted;
+   assign in_data_im_shifted = in_data_im >> `MSG_SHIFT;
+   wire [((`MSG_WIDTH-1)/2)*2-1:0]      in_data_shifted;
+   assign in_data_shifted = {in_data_re_shifted, in_data_im_shifted};
+   wire [`MSG_WIDTH-1:0]                in_data_msg;
+   assign in_data_msg = in_data_shifted;
    
    initial
      begin
@@ -61,7 +75,7 @@ module nothing
              full_msg_nd <= ~full_msg_nd;
              // format is {header, length excluding header, format code, module key, error key}
              // format code is always 0 for now.
-             full_msg <= {1'b1, `MSG_LENGTH_WIDTH'd1, `MSG_FORMATCODE_WIDTH'd0, `MSG_MODULECODE_WIDTH'd0, `MSG_ERRORCODE_WIDTH'd0, 1'b0, in_data};
+             full_msg <= {1'b1, `MSG_LENGTH_WIDTH'd1, `MSG_FORMATCODE_WIDTH'd0, `MSG_MODULECODE_WIDTH'd0, `MSG_ERRORCODE_WIDTH'd0, in_data_msg};
           end
    `endif
         out_data <= in_data;

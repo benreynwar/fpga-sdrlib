@@ -46,6 +46,10 @@ def generate_slicer_files():
     for f in inputfiles:
         outputfiles.append(copyfile('message', f))
     return outputfiles
+
+def generate_sample_msg_splitter_files():
+    check_builddir()
+    return [copyfile('message', 'sample_msg_splitter.v')]
     
 def generate_files():
     return generate_stream_combiner_files() + generate_slicer_files()

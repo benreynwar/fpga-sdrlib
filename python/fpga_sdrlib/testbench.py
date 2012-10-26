@@ -87,8 +87,7 @@ class TestBenchBase(object):
     def run(self):
         raise StandardError("Not implemented.")
 
-
-class TestBenchIcarus(TestBenchBase):
+class TestBenchIcarusBase(TestBenchBase):
     """
     A minimal TestBench to run the module using icarus verilog.
 
@@ -97,6 +96,7 @@ class TestBenchIcarus(TestBenchBase):
         in_samples: A list of complex points to send.
         sendnth: Send an input on every `sendnth` clock cycle.
         in_ms: A list of the meta data to send.
+        start_msgs: A list of messages to send before sending samples.
         defines: Macro definitions (constants) to use in verilog code.
     """
 
@@ -108,7 +108,7 @@ class TestBenchIcarus(TestBenchBase):
 
     def __init__(self, name, in_samples, sendnth=config.default_sendnth,
                  in_ms=None, start_msgs=None, defines=config.default_defines):
-        super(TestBenchIcarus, self).__init__(in_samples, in_ms, defines)
+        TestBenchBase.__init__(self, in_samples, in_ms, defines)
         debug = ("DEBUG" in defines) and defines["DEBUG"]
         self.in_width = defines["WIDTH"]
         self.out_width = defines["WIDTH"]
@@ -126,35 +126,12 @@ class TestBenchIcarus(TestBenchBase):
         # Set the MyHDL drivers
         self.drivers = [self.clk_driver, self.get_output, self.check_error,
                         self.send_input, self.prerun]
-        if debug:
-            self.drivers.append(self.get_message_stream)
 
     def clk_driver(self):
         @always(delay(1))
         def run():
             """ Drives the clock."""
             self.clk.next = not self.clk
-        return run
-
-    def get_message_stream(self):
-        @always(self.clk.posedge)
-        def run():
-            """
-            Receive messages.
-            """
-            if self.out_msg_nd:
-                self.out_msgs.append(int(self.out_msg))
-        return run
-
-    def get_output(self):
-        @always(self.clk.posedge)
-        def run():
-            """
-            Receive output.
-            """
-            if self.out_nd:
-                self.out_samples.append(int_to_c(self.out_data, self.out_width/2))
-                self.out_ms.append(int(self.out_m))
         return run
 
     def check_error(self):
@@ -180,7 +157,19 @@ class TestBenchIcarus(TestBenchBase):
         sim.run(2*clks)
         dut.__del__()
         del dut
-        self.out_messages = stream_to_packets(self.out_msgs)
+
+    def get_output(self):
+        self.out_raw = []
+        @always(self.clk.posedge)
+        def run():
+            """
+            Receive output.
+            """
+            if self.out_nd:
+                self.out_raw.append(int(self.out_data))
+                if 'out_m' in self.base_signal_names:
+                    self.out_ms.append(int(self.out_m))
+        return run
 
     def send_input(self):
         self.count = 0
@@ -195,14 +184,72 @@ class TestBenchIcarus(TestBenchBase):
             if not self.doing_prerun:
                 # Send input.
                 if self.count >= self.sendnth and self.datapos < len(self.in_samples):
-                    self.in_data.next = c_to_int(self.in_samples[self.datapos], self.in_width/2)
-                    self.in_m.next = self.in_ms[self.datapos]
+                    self.in_data.next = self.in_raw[self.datapos]
+                    if 'in_m' in self.base_signal_names:
+                        self.in_m.next = self.in_ms[self.datapos]
                     self.in_nd.next = 1
                     self.datapos += 1
                     self.count = 0
                 else:
                     self.in_nd.next = 0
                     self.count += 1
+        return run
+
+    def prerun(self):
+        self.first = True
+        self.done_header = False
+        self.doing_prerun = True
+        self.msg_pos = 0
+        @always(self.clk.posedge)
+        def run():
+            """
+            Sends a reset signal at start.
+            """
+            if self.first:
+                self.first = False
+                self.rst_n.next = 0
+            else:
+                self.rst_n.next = 1
+                self.doing_prerun = False
+        return run
+
+class TestBenchIcarus(TestBenchIcarusBase):
+    """
+    A minimal TestBench to run the module using icarus verilog.
+
+    Args:
+        name: A name to use with for generated files.
+        in_samples: A list of complex points to send.
+        sendnth: Send an input on every `sendnth` clock cycle.
+        in_ms: A list of the meta data to send.
+        start_msgs: A list of messages to send before sending samples.
+        defines: Macro definitions (constants) to use in verilog code.
+    """
+
+    extra_signal_names = []
+    base_signal_names = ['clk', 'rst_n',
+                         'in_data', 'in_nd', 'in_m', 'in_msg', 'in_msg_nd',
+                         'out_data', 'out_nd', 'out_m', 'out_msg', 'out_msg_nd',
+                         'error']
+
+    def __init__(self, *args, **kwargs):
+        TestBenchIcarusBase.__init__(self, *args, **kwargs)
+        self.drivers.append(self.get_message_stream)
+        self.in_raw = [c_to_int(d, self.in_width/2) for d in self.in_samples]
+                    
+    def run(self, steps_rqd):
+        TestBenchIcarusBase.run(self, steps_rqd)
+        self.out_samples = [(int_to_c(d, self.out_width/2)) for d in self.out_raw]
+        self.out_messages = stream_to_packets(self.out_msgs)
+
+    def get_message_stream(self):
+        @always(self.clk.posedge)
+        def run():
+            """
+            Receive messages.
+            """
+            if self.out_msg_nd:
+                self.out_msgs.append(int(self.out_msg))
         return run
 
     def prerun(self):
@@ -221,7 +268,7 @@ class TestBenchIcarus(TestBenchBase):
                 self.rst_n.next = 0
             else:
                 self.rst_n.next = 1
-                if self.start_msgs and self.msg_pos < len(self.start_msgs):
+                if self.start_msgs and (self.msg_pos < len(self.start_msgs)):
                     self.in_msg.next = self.start_msgs[self.msg_pos]
                     self.in_msg_nd.next = 1
                     self.msg_pos += 1
@@ -230,4 +277,45 @@ class TestBenchIcarus(TestBenchBase):
                     self.in_msg_nd.next = 0
         return run
         
+class TestBenchIcarusCombined(TestBenchIcarusBase):
+    """
+    A minimal TestBench to run the module using icarus verilog.
 
+    Args:
+        name: A name to use with for generated files.
+        in_samples: A list of complex points to send.
+        sendnth: Send an input on every `sendnth` clock cycle.
+        in_ms: A list of the meta data to send.
+        start_msgs: A list of messages to send before sending samples.
+        defines: Macro definitions (constants) to use in verilog code.
+    """
+
+    extra_signal_names = []
+    base_signal_names = ['clk', 'rst_n',
+                         'in_data', 'in_nd',
+                         'out_data', 'out_nd',
+                         'error']
+
+    def __init__(self, *args, **kwargs):
+        TestBenchIcarusBase.__init__(self, *args, **kwargs)
+        # Generate the raw data to send in.
+        self.in_raw = []
+        if self.start_msgs is not None:
+            self.in_raw += self.start_msgs
+        # Subtracting 1 from width since we use 1st bit as a header.
+        self.in_raw += [c_to_int(d, self.in_width/2-1) for d in self.in_samples]
+
+    def run(self, steps_rqd):
+        TestBenchIcarusBase.run(self, steps_rqd)
+        header_shift = pow(2, self.out_width-1)
+        packets = stream_to_packets(self.out_raw)
+        self.out_samples = []
+        self.out_messages = []
+        for p in packets:
+            if p[0] // header_shift:
+                self.out_messages.append(p)
+            else:
+                # It is a sample
+                assert(len(p) == 1)
+                self.out_samples.append(int_to_c(p[0], self.out_width/2-1))
+    

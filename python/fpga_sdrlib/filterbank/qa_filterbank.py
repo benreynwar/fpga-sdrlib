@@ -28,13 +28,13 @@ def convolve(data, taps):
         out.append(v)
     return out
 
-def taps_to_start_msgs(taps):
+def taps_to_start_msgs(taps, width):
     # First block has header flag set.
     start_msgs = [pow(2, config.msg_width-1)]
     # Following blocks contain taps.
     for flt in taps:
         for tap in flt:
-            start_msgs.append(f_to_int(tap, (config.msg_width-1)/2, clean1=True))
+            start_msgs.append(f_to_int(tap, width, clean1=True))
     return start_msgs
 
 class FilterbankTestBenchIcarus(TestBenchIcarus):
@@ -57,7 +57,7 @@ class FilterbankTestBenchIcarus(TestBenchIcarus):
     def __init__(self, name, n_filters, filter_length, taps, in_samples,
                  sendnth=config.default_sendnth,
                  in_ms=None, defines=config.default_defines):
-        start_msgs = taps_to_start_msgs(taps)
+        start_msgs = taps_to_start_msgs(taps, defines['WIDTH']/2)
         super(FilterbankTestBenchIcarus, self).__init__(name, in_samples, sendnth,
                                                  in_ms, start_msgs, defines)
         self.n_filters = n_filters

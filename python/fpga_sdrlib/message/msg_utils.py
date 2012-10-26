@@ -1,6 +1,6 @@
 from fpga_sdrlib.config import msg_length_width, msg_width
 
-def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width):
+def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width, allow_samples=True):
     header_shift = pow(2, width-1)
     length_shift1 = pow(2, width-1-bits_for_length)
     length_shift2 = pow(2, bits_for_length)
@@ -25,6 +25,8 @@ def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width)
                 packets.append([block])
         if (not header) and (not in_packet):
             # Treat a sample as a packet of length 1.
+            if not allow_samples:
+                raise ValueError("No header found when expecting one.")
             packets.append([block])
         if (not header) and in_packet:
             packet.append(block)

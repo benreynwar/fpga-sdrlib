@@ -72,7 +72,7 @@ class ChannelizerTestBenchIcarus(TestBenchIcarus):
         self.taps = taps
         self.n_taps = len(taps[0])
         self.width = defines['WIDTH']
-        start_msgs = taps_to_start_msgs(taps)
+        start_msgs = taps_to_start_msgs(taps, self.width/2)
         TestBenchIcarus.__init__(self, name, in_samples, sendnth, in_ms, start_msgs, defines)
         self.drivers.append(self.get_first_channel)
 
