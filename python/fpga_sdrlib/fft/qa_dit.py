@@ -93,9 +93,9 @@ class TestFFT(unittest.TestCase):
         mwidth = 3
         ms = [self.myrandint(0, pow(2, mwidth)-1) for d in data]
         # Create, setup and simulate the test bench.
-        defines = {"DEBUG": False,
-                   "WIDTH": width,
-                   "MWIDTH": mwidth}
+        defines = config.updated_defines({"DEBUG": False,
+                                          "WIDTH": width,
+                                          "MWIDTH": mwidth})
         tb = DITTestBenchIcarus('standard', N, data, sendnth, ms, defines=defines)
         tb.prepare()
         tb.run(steps_rqd)

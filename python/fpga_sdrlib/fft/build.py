@@ -72,10 +72,9 @@ def generate_dit_executable(name, fft_length, defines):
     executable = os.path.join(config.builddir, 'fft', executable)
     inputfilestr = ' '.join(inputfiles + [dut_dit_fn])
     definestr = make_define_string(defines)
-    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+    cmd = ("iverilog -o {executable} {definestr} {inputfiles}"
            ).format(executable=executable,
                     definestr=definestr,
-                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)

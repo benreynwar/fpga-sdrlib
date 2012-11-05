@@ -7,6 +7,7 @@ import shutil
 import logging
 
 from fpga_sdrlib import config
+from fpga_sdrlib import b100
 from fpga_sdrlib.buildutils import copyfile, format_template, make_define_string
 from fpga_sdrlib.message.build import generate_slicer_files
 from fpga_sdrlib.uhd.build import generate_qa_wrapper_files
@@ -33,31 +34,40 @@ def generate_nothing_executable(name, defines):
     executable = 'nothing_{name}'.format(name=name)
     executable = os.path.join(nothing_builddir, executable)
     definestr = make_define_string(defines)
-    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+    cmd = ("iverilog -o {executable} {definestr} {inputfiles}"
            ).format(executable=executable,
                     definestr=definestr,
-                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
     return executable
     
-def generate_nothing_combined_executable(name, defines):
+def generate_nothing_combined_files():
     nothing_builddir= os.path.join(config.builddir, 'nothing')
     inputfiles = generate_nothing_files()
     inputfiles += generate_qa_wrapper_files()
     inputfiles.append(copyfile('nothing', 'qa_nothing.v'))
+    return inputfiles
+
+def generate_nothing_combined_executable(name, defines):
+    nothing_builddir= os.path.join(config.builddir, 'nothing')
+    inputfiles = generate_nothing_combined_files()
+    inputfiles.append(copyfile('uhd', 'dut_qa_wrapper.v'))
     inputfilestr = ' '.join(inputfiles)
     executable = 'nothing_combined_{name}'.format(name=name)
     executable = os.path.join(nothing_builddir, executable)
     definestr = make_define_string(defines)
-    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+    cmd = ("iverilog -o {executable} {definestr} {inputfiles}"
            ).format(executable=executable,
                     definestr=definestr,
-                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
     return executable
 
+def generate_nothing_B100_image(name, defines):
+    nothing_builddir= os.path.join(config.builddir, 'nothing')
+    inputfiles = generate_nothing_combined_files()
+    b100.make_make(name, nothing_builddir, inputfiles, defines)
+    b100.synthesise(name, nothing_builddir)
     

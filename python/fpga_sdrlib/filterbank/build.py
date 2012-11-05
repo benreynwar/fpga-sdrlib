@@ -56,15 +56,16 @@ def generate_filterbank_executable(name, n_filters, filter_length, defines):
     executable = "filterbank_{name}".format(name=name)
     executable = os.path.join(config.builddir, 'filterbank', executable)
     inputfilestr = ' '.join(inputfiles + [dut_filterbank_fn])
-    defines['N'] = n_filters
-    defines['LOG_N'] = int(math.ceil(math.log(n_filters)/math.log(2)))
-    defines['FLTLEN'] = filter_length
-    defines['LOG_FLTLEN'] = int(math.ceil(math.log(filter_length)/math.log(2)))
+    defines.update({
+            'N': n_filters,
+            'LOG_N': int(math.ceil(math.log(n_filters)/math.log(2))),
+            'FLTLEN': filter_length,
+            'LOG_FLTLEN': int(math.ceil(math.log(filter_length)/math.log(2))),
+            })
     definestr = make_define_string(defines)
-    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+    cmd = ("iverilog -o {executable} {definestr} {inputfiles}"
            ).format(executable=executable,
                     definestr=definestr,
-                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)

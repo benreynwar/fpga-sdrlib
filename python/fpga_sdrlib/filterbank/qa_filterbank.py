@@ -136,9 +136,9 @@ class TestFilterbank(unittest.TestCase):
         # Expected first filter signals
         ffs = ([1] + [0]*(n_filters-1))*n_data
         # Create the test bench
-        defines = {"DEBUG": False,
-                   "WIDTH": width,
-                   "MWIDTH": mwidth}
+        defines = config.updated_defines({"DEBUG": False,
+                                          "WIDTH": width,
+                                          "MWIDTH": mwidth})
         tb = FilterbankTestBenchIcarus('simpletaps', n_filters, filter_length, taps, data, sendnth, ms, defines)
         tb.prepare()
         tb.run(steps_rqd)
@@ -182,9 +182,9 @@ class TestFilterbank(unittest.TestCase):
         sendnth = 2
         steps_rqd = 20 * sendnth + 1000
         # Create the test bench
-        defines = {"DEBUG": False,
-                   "WIDTH": width,
-                   "MWIDTH": mwidth}
+        defines = config.updated_defines({"DEBUG": False,
+                                          "WIDTH": width,
+                                          "MWIDTH": mwidth})
         tb = FilterbankTestBenchIcarus('simpletaps', n_filters, filter_length, taps, data, sendnth, ms, defines)
         tb.prepare()
         tb.run(steps_rqd)
@@ -230,9 +230,9 @@ class TestFilterbank(unittest.TestCase):
         chantaps, tapsscalefactor = scale_taps(taps)
         steps_rqd = n_data * n_filters * sendnth + 1000
         # Create the test bench
-        defines = {"DEBUG": False,
-                   "WIDTH": width,
-                   "MWIDTH": mwidth}
+        defines = config.updated_defines({"DEBUG": False,
+                                          "WIDTH": width,
+                                          "MWIDTH": mwidth})
         tb = FilterbankTestBenchIcarus('simpletaps', n_filters, n_taps, chantaps, data, sendnth, ms, defines)
         tb.prepare()
         tb.run(steps_rqd)

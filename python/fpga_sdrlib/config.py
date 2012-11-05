@@ -3,6 +3,7 @@
 
 import logging
 import os
+from copy import copy
 from os.path import dirname
 
 uhddir = os.path.join('/', 'home', 'ben', 'Code', 'uhd')
@@ -13,28 +14,34 @@ verilogdir = os.path.join(basedir, 'verilog')
 builddir = os.path.join(basedir, 'build')
 
 default_sendnth = 4
-default_defines = {"DEBUG": False,
-                   "WIDTH": 32,
-                   "MWIDTH": 1}
-
+default_width = 32
+default_mwidth = 1
+default_debug = False
 msg_width = 32
 msg_length_width = 10
 msg_formatcode_width = 4
 msg_modulecode_width = 10
 msg_errorcode_width = 7
-msg_options = []
-msg_options.append("-DMSG_WIDTH={msg_width}")
-msg_options.append("-DMSG_LENGTH_WIDTH={msg_length_width}")
-msg_options.append("-DMSG_FORMATCODE_WIDTH={msg_formatcode_width}")
-msg_options.append("-DMSG_MODULECODE_WIDTH={msg_modulecode_width}")
-msg_options.append("-DMSG_ERRORCODE_WIDTH={msg_errorcode_width}")
-msg_options = ' '.join(msg_options)
-msg_options = msg_options.format(
-    msg_width=msg_width,
-    msg_length_width=msg_length_width,
-    msg_formatcode_width=msg_formatcode_width,
-    msg_modulecode_width=msg_modulecode_width,
-    msg_errorcode_width=msg_errorcode_width)
+# How many bits to chop off real numbers in the complex stream
+# so that we get some header bits.
+msg_shift = 1
+
+default_defines = {
+    "DEBUG": default_debug,
+    "WIDTH": default_width,
+    "MWIDTH": default_mwidth,
+    'MSG_WIDTH': msg_width,
+    'MSG_LENGTH_WIDTH': msg_length_width,
+    'MSG_FORMATCODE_WIDTH': msg_formatcode_width,
+    'MSG_MODULECODE_WIDTH': msg_modulecode_width,
+    'MSG_ERRORCODE_WIDTH': msg_errorcode_width,
+    'MSG_SHIFT': msg_shift,
+    }
+
+def updated_defines(updates):
+    defines = copy(default_defines)
+    defines.update(updates)
+    return defines
 
 def setup_logging(level):
     "Utility function for setting up logging."

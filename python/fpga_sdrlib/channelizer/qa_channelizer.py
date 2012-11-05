@@ -179,9 +179,9 @@ class TestChannelizer(unittest.TestCase):
         self.ms = [self.myrandint(0, 7) for d in self.data]
         # Create the test bench
         name = 'complex'
-        defines = {"DEBUG": False,
-                   "WIDTH": self.width,
-                   "MWIDTH": self.mwidth}
+        defines = config.updated_defines({"DEBUG": False,
+                                          "WIDTH": self.width,
+                                          "MWIDTH": self.mwidth})
         rtaps = []
         for tt in self.taps:
             rtaps.append(list(reversed(tt)))

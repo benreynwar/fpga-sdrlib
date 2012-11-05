@@ -319,3 +319,80 @@ class TestBenchIcarusCombined(TestBenchIcarusBase):
                 assert(len(p) == 1)
                 self.out_samples.append(int_to_c(p[0], self.out_width/2-1))
     
+
+class TestBenchB100(TestBenchBase):
+    """
+    A minimal TestBench to run the module on the B100 FPGA.
+
+    Args:
+        name: A name to use with for generate files.
+        in_samples: A list of complex points to send.
+        start_msgs: A list of messages to send before sending samples.
+        defines: Macro definitions (constants) to use in verilog code.
+    """
+    
+    def __init__(self, name, in_samples, start_msgs=None, defines=config.default_defines):
+        in_ms = None
+        TestBenchBase.__init__(self, in_samples, in_ms, start_msgs, defines)
+        # Generate the raw data to send in.
+        self.name = name
+        self.in_raw = []
+        self.in_width = defines['WIDTH']
+        self.out_width = self.in_width
+        if self.start_msgs is not None:
+            self.in_raw += self.start_msgs
+        # Subtracting 1 from width since we use 1st bit as a header.
+        self.in_raw += [c_to_int(d, self.in_width/2-1) for d in self.in_samples]
+
+    def run(self, steps_rqd=None):
+        # steps_rqd only in for compatibility
+        from gnuradio import gr, uhd
+        n_receive = 10000
+
+        stream_args = uhd.stream_args(cpu_format='sc16', channels=range(1))
+        from_usrp = uhd.usrp_source(device_addr='', stream_args=stream_args)
+        head = gr.head(4, n_receive)
+        snk = gr.vector_sink_i()
+        to_usrp = uhd.usrp_sink(device_addr='', stream_args=stream_args)
+        src = gr.vector_source_i(self.in_raw)
+        tb = gr.top_block()
+        tb.connect(from_usrp, head, snk)
+        tb.connect(src, to_usrp)
+        tb.run()
+        self.out_raw = snk.data()
+        
+        # Remove 0's
+        start_offset = None
+        stop_offset = None
+        enumerated_raw = list(enumerate(self.out_raw))
+        for i, r in enumerated_raw:
+            if r != 0:
+                start_offset = i
+                break
+        for i, r in reversed(enumerated_raw):
+            if r != 0:
+                stop_offset = i
+                break
+        if start_offset is None or stop_offset is None:
+            raise StandardError("Could not find any non-zero returned data.")
+        self.out_raw = self.out_raw[start_offset: stop_offset+1]
+
+        # Shift to positive integers
+        positive = []
+        for r in self.out_raw:
+            if r < 0:
+                r += pow(2, self.out_width)
+            positive.append(r)
+        self.out_raw = positive
+        header_shift = pow(2, self.out_width-1)
+        packets = stream_to_packets(self.out_raw)
+        self.out_samples = []
+        self.out_messages = []
+        for p in packets:
+            if p[0] // header_shift:
+                self.out_messages.append(p)
+            else:
+                # It is a sample
+                assert(len(p) == 1)
+                self.out_samples.append(int_to_c(p[0], self.out_width/2-1))
+    

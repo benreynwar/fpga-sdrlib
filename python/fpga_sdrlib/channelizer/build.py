@@ -59,15 +59,16 @@ def generate_channelizer_executable(name, n_chans, width, filter_length, defines
     executable = "channelizer_{name}".format(name=name)
     executable = os.path.join(config.builddir, 'channelizer', executable)
     inputfilestr = ' '.join(inputfiles + [dut_channelizer_fn])
-    defines['N'] = n_chans
-    defines['LOG_N'] = int(math.ceil(math.log(n_chans)/math.log(2)))
-    defines['FLTLEN'] = filter_length
-    defines['LOG_FLTLEN'] = int(math.ceil(math.log(filter_length)/math.log(2)))
+    defines.update({
+            'N': n_chans,
+            'LOG_N': int(math.ceil(math.log(n_chans)/math.log(2))),
+            'FLTLEN': filter_length,
+            'LOG_FLTLEN': int(math.ceil(math.log(filter_length)/math.log(2))),
+})
     definestr = make_define_string(defines)
-    cmd = ("iverilog -o {executable} {definestr} {msg_options} {inputfiles}"
+    cmd = ("iverilog -o {executable} {definestr} {inputfiles}"
            ).format(executable=executable,
                     definestr=definestr,
-                    msg_options=config.msg_options,
                     inputfiles=inputfilestr)
     logger.debug(cmd)
     os.system(cmd)
