@@ -8,7 +8,7 @@ module qa_wrapper
     )
    (
     input wire                   clk,
-    input wire                   rst_n,
+    input wire                   reset,
     input wire [WDTH-1:0]        in_data,
     input wire                   in_nd,
     output wire [WDTH-1:0]        out_data,
@@ -22,6 +22,9 @@ module qa_wrapper
    wire [`MSG_WIDTH-1:0]   in_msg;
    wire                    in_msg_nd;
    wire                    splitter_error;
+
+   wire                    rst_n;
+   assign rst_n = ~reset;
 
    sample_msg_splitter #(WDTH) sample_msg_splitter_0
      (.clk(clk),
@@ -44,7 +47,7 @@ module qa_wrapper
    wire                    qa_error;
    wire [WDTH-1:0]         in_samples_shifted;
    assign in_samples_shifted = {in_samples[WDTH-3:WDTH/2-1], 1'b0, in_samples[WDTH/2-2: 0], 1'b0};
-   
+
    qa_contents #(WDTH) qa_contents_0
      (.clk(clk),
       .rst_n(rst_n),
@@ -58,13 +61,13 @@ module qa_wrapper
       .out_msg_nd(out_msg_nd),
       .error(error)
       );
-
+   
    // The samples and messages are merged into common stream.
    
    wire                    combiner_error;
    wire [WDTH-1:0]         out_samples_shifted;
    assign out_samples_shifted = {2'b0, out_samples[WDTH-1 :WDTH/2+1], out_samples[WDTH/2-1 :1]};
-        
+
    message_stream_combiner #(2, 1, WDTH) message_stream_combiner_0
      (.clk(clk),
       .rst_n(rst_n),

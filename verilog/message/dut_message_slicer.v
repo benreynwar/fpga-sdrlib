@@ -19,7 +19,7 @@ module dut_message_slicer;
    end
    
    message_slicer
-     #( `N_SLICES, `WIDTH,
+     #( `N_SLICES, `LOG_N_SLICES, `WIDTH,
         `BUFFER_LENGTH, `LOG_BUFFER_LENGTH)
    dut
      (clk, rst_n, in_data, in_nd, out_data, out_nd, error);

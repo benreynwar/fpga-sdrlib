@@ -7,10 +7,11 @@ import os
 import logging
 import time
 
-from fpga_sdrlib import config
+from fpga_sdrlib import config, b100
 from fpga_sdrlib.buildutils import copyfile, format_template
 
 logger = logging.getLogger(__name__)
+
 
 def logceil(n):
     val = int(math.ceil(float(math.log(n))/math.log(2)))
@@ -53,6 +54,25 @@ def generate_sample_msg_splitter_files():
     
 def generate_files():
     return generate_stream_combiner_files() + generate_slicer_files()
+
+def generate_sample_msg_splitter_B100_image(name, defines=config.default_defines):
+    message_builddir= os.path.join(config.builddir, 'message')
+    inputfiles = generate_sample_msg_splitter_files()
+    inputfiles.append(copyfile('message', 'qa_sample_msg_splitter.v'))
+    b100.make_make(name, message_builddir, inputfiles, defines)
+    for f in inputfiles:
+        b100.prefix_defines(f, defines)
+    b100.synthesise(name, message_builddir)
+
+def generate_combo_B100_image(name, defines=config.default_defines):
+    message_builddir= os.path.join(config.builddir, 'message')
+    inputfiles = generate_sample_msg_splitter_files()
+    inputfiles += generate_stream_combiner_files()
+    inputfiles.append(copyfile('message', 'qa_combo.v'))
+    b100.make_make(name, message_builddir, inputfiles, defines)
+    for f in inputfiles:
+        b100.prefix_defines(f, defines)
+    b100.synthesise(name, message_builddir)
 
 def generate_stream_combiner_executable(
     method, n_streams, width, input_buffer_length, max_packet_length):
@@ -119,10 +139,12 @@ def generate_slicer_executable(method, n_slices, width, buffer_length):
     inputfiles = [os.path.join(config.builddir, 'message', f) for f in inputfiles]
     inputfilestr = ' '.join(inputfiles + [dut_ms_fn])
     cmd = ("iverilog -o {executable} -DN_SLICES={n_slices} "
+           "-DLOG_N_SLICES={log_n_slices} "
            "-DWIDTH={width} -DBUFFER_LENGTH={buffer_length} "
            "-DLOG_BUFFER_LENGTH={log_buffer_length} "
            "{inputfiles} "
            ).format(executable=executable, n_slices=n_slices,
+                    log_n_slices=int(math.ceil(math.log(n_slices)/math.log(2))),
                     width=width,
                     buffer_length=buffer_length,
                     log_buffer_length=int(log_buffer_length),

@@ -24,22 +24,31 @@ module message_stream_combiner
     input wire [N_STREAMS-1:0]       in_nd,
     output reg [WIDTH-1:0]           out_data,
     output reg                       out_nd,
-    output reg                       error       
+    output wire                       error       
     );
 
    // Input Buffers info
    reg [WIDTH-1:0]                   input_buffers [INPUT_BUFFER_LENGTH*N_STREAMS-1:0];
-   reg [INPUT_BUFFER_LENGTH*N_STREAMS-1:0] input_buffers_full;
+   // When filled and emptied are equal it is empty.
+   // When they are opposite it is full.
+   reg [INPUT_BUFFER_LENGTH*N_STREAMS-1:0] input_buffers_filled;
+   reg [INPUT_BUFFER_LENGTH*N_STREAMS-1:0] input_buffers_emptied;
+   wire [INPUT_BUFFER_LENGTH*N_STREAMS-1:0] input_buffers_full;
    reg [LOG_INPUT_BUFFER_LENGTH-1:0]       input_buffers_write_pos[N_STREAMS-1:0];
    reg [LOG_INPUT_BUFFER_LENGTH-1:0]       input_buffers_read_pos[N_STREAMS-1:0];
+   reg [N_STREAMS-1:0]                     stream_errors;                    
 
+   assign error = | stream_errors;
+   
+   assign input_buffers_full = input_buffers_filled ^ input_buffers_emptied;
 
    genvar                            i, j;
 
    initial
      begin
-        input_buffers_full <= {INPUT_BUFFER_LENGTH * N_STREAMS{1'b0}};
-        error <= 1'b0;
+        input_buffers_filled <= {INPUT_BUFFER_LENGTH * N_STREAMS{1'b0}};
+        input_buffers_emptied <= {INPUT_BUFFER_LENGTH * N_STREAMS{1'b0}};
+        stream_errors <= {N_STREAMS{1'b0}};
      end
    
    generate
@@ -66,11 +75,11 @@ module message_stream_combiner
                      //$display("Write to input buffer %d", in_data[WIDTH*(j+1)-1 -:WIDTH]);
                      input_buffers[INPUT_BUFFER_LENGTH*j + input_buffers_write_pos[j]] <= in_data[WIDTH*(j+1)-1 -:WIDTH];
                      input_buffers_write_pos[j] <= input_buffers_write_pos[j] + 1;
-                     input_buffers_full[INPUT_BUFFER_LENGTH*j + input_buffers_write_pos[j]] <= 1'b1;
+                     input_buffers_filled[INPUT_BUFFER_LENGTH*j + input_buffers_write_pos[j]] <= ~input_buffers_filled[INPUT_BUFFER_LENGTH*j + input_buffers_write_pos[j]];
                   end
                 else
                   begin
-                     error <= 1'b1;
+                     stream_errors[j] <= 1'b1;
                   end
              end
         end
@@ -106,7 +115,7 @@ module message_stream_combiner
         //$display("first input buffers full are %d %d", input_buffers_full[0], input_buffers_full[64]);
         if (input_buffers_full[i_buffer_read_pos])
           begin
-             input_buffers_full[i_buffer_read_pos] <= 1'b0;
+             input_buffers_emptied[i_buffer_read_pos] <= ~input_buffers_emptied[i_buffer_read_pos];
              out_data <= input_buffers[i_buffer_read_pos];
              out_nd <= 1'b1;
              input_buffers_read_pos[stream] <= input_buffers_read_pos[stream] + 1;

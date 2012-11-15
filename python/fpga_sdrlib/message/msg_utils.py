@@ -14,9 +14,9 @@ def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width,
             continue
         header = block // header_shift
         if header:
-            if in_packet:
-                raise ValueError("Got a header when we weren't expecting it.")
             packet_length = block // length_shift1 - header*length_shift2
+            if in_packet:
+                raise ValueError("Got a header when we weren't expecting it. Pos is {0}. New length is {1}".format(packet_pos, packet_length))
             if packet_length > 0:
                 packet_pos = 0
                 in_packet = True
@@ -37,6 +37,23 @@ def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width,
                 in_packet = False
                 packet_pos = None
     return packets
+
+def stream_to_samples_and_packets(stream, bits_for_length=msg_length_width, width=msg_width):
+    header_shift = pow(2, width-1)
+    mixed = stream_to_packets(stream, bits_for_length, width, True)
+    packets = []
+    samples = []
+    for p in mixed:
+        if len(p) > 1:
+            packets.append(p)
+        else:
+            header = p[0] // header_shift
+            if header:
+                packets.append(p)
+            else:
+                samples.append(p[0])
+    return samples, packets
+            
 
 def make_packet_dict(packets):
     packet_dict = {}

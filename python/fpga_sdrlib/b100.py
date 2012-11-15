@@ -15,6 +15,9 @@ from fpga_sdrlib.config import uhddir, miscdir, fpgaimage_fn
 b100dir = os.path.join(uhddir, 'fpga', 'usrp2', 'top', 'B100')
 custom_src_dir = os.path.join(config.verilogdir, 'uhd')
 
+def set_image(fn):
+    shutil.copyfile(fn, fpgaimage_fn)
+
 def make_defines_file(builddir, defines):
     fn = os.path.join(builddir, 'global_defines.vh')
     f = open(fn, 'w')
@@ -25,7 +28,12 @@ def make_defines_file(builddir, defines):
 def make_defines_prefix(defines):
     lines = []
     for k, v in defines.items():
-        lines.append('`define {0} {1}'.format(k, v))
+        if v is False:
+            pass
+        elif v is True:
+            lines.append('`define {0}'.format(k))
+        else:
+            lines.append('`define {0} {1}'.format(k, v))
     txt = '\n'.join(lines)
     txt += '\n'
     return txt
@@ -42,7 +50,7 @@ def prefix_defines(fn, defines):
 
 def make_make(name, builddir, inputfiles, defines):
     header = make_defines_file(builddir, defines)
-    shutil.copy(header, os.path.join(config.builddir, 'message'))
+    #shutil.copy(header, os.path.join(config.builddir, 'message'))
     inputfiles = [header] + inputfiles
     output_fn = os.path.join(builddir, 'Make.B100_{name}'.format(name=name))
     template_fn = 'Make.B100_qa.t'
@@ -88,4 +96,5 @@ def synthesise(name, builddir):
         raise StandardError("Synthesis failed: see {0}".format(logfile_fn))
     f.close()
     os.chdir(currentdir)
+    return os.path.join(output_dir, 'B100.bin')
 

@@ -68,6 +68,8 @@ module sample_msg_splitter
                             packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
                             packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
                          end
+                       else
+                         packet_pos <= packet_pos + 1;
                        out_msg <= in_data;
                        out_msg_nd <= 1'b1;
                        out_samples_nd <= 1'b0;

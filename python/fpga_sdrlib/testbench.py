@@ -8,8 +8,35 @@ from myhdl import Cosimulation, Signal, delay, always, Simulation, _simulator
 from gnuradio import uhd, gr
 
 from fpga_sdrlib import config
+from fpga_sdrlib import b100
 from fpga_sdrlib.conversions import c_to_int, int_to_c
 from fpga_sdrlib.message.msg_utils import stream_to_packets
+
+def flip_bits(seq, width):
+    """
+    Takes a sequence of integers.  For each integer the higher and lower
+    bits are swapped round.  Necessary to work around a bug in
+    gr-uhd.
+    """
+    out = []
+    h = pow(2, width//2)
+    for x in seq:
+        high_bits = x//h
+        low_bits = x % h
+        out.append(high_bits + low_bits * h)
+    return out
+
+def unsigned_to_signed(seq, width):
+    """
+    Convert unsigned integer to signed.
+    """
+    out = []
+    k = pow(2, width)
+    for x in seq:
+        if x >= k/2:
+            x -= k
+        out.append(x)
+    return out
         
 def compare_unaligned(xs, ys, tol):
     """
@@ -41,91 +68,28 @@ def compare_unaligned(xs, ys, tol):
             break
     return max_streak
 
-def get_usrp_output(n):
-    """
-    Grabs data from USRP
+"""
+What testbenchs do I need:
+  samples, msgs, ms (raw module)
 
-    Args:
-        n: Number of datapoint to get
-    """
-    stream_args = uhd.stream_args(cpu_format='fc32', channels=range(1))
-    from_usrp = uhd.usrp_source(device_addr='', stream_args=stream_args)
-    head = gr.head(gr.sizeof_gr_complex, n)
-    snk = gr.vector_sink_c()
-    tb = gr.top_block()
-    tb.connect(from_usrp, head, snk)
-    tb.run()
-    return snk.data()
+  samples, msgs in -> into merged stream ->samples, msgs out
+  raw 32 bit in and out
+  
+"""
 
-class TestBenchBase(object):
+class TestBenchIcarusBase(object):
     """
-    Defines the interface for a test bench to test a module.
-
-    Args:
-        in_samples: The complex numbers to send.
-        in_ms: Meta data to send.
-        start_msgs: Messages to send before sending the samples.
-        defines: Preprocessor macro definitions.
+    A base class for TestBenchIcarusInner and TestBenchIcarusOuter.
+    Holds common code.
     """
 
-    def __init__(self, in_samples, in_ms=None, start_msgs=None, defines=config.default_defines):
-        self.in_samples = in_samples
-        self.start_msgs = start_msgs
-        if in_ms is not None:
-            assert(len(in_samples) == len(in_ms))
-        else:
-            in_ms = [0] * len(in_samples)
-        self.in_ms = in_ms
-        self.defines = defines
-        self.out_samples = []
-        self.out_ms = []
-        self.out_msgs = []
-
-    def prepare(self):
-        raise StandardError("Not implemented")
-
-    def run(self):
-        raise StandardError("Not implemented.")
-
-class TestBenchIcarusBase(TestBenchBase):
-    """
-    A minimal TestBench to run the module using icarus verilog.
-
-    Args:
-        name: A name to use with for generated files.
-        in_samples: A list of complex points to send.
-        sendnth: Send an input on every `sendnth` clock cycle.
-        in_ms: A list of the meta data to send.
-        start_msgs: A list of messages to send before sending samples.
-        defines: Macro definitions (constants) to use in verilog code.
-    """
-
-    extra_signal_names = []
-    base_signal_names = ['clk', 'rst_n',
-                         'in_data', 'in_nd', 'in_m', 'in_msg', 'in_msg_nd',
-                         'out_data', 'out_nd', 'out_m', 'out_msg', 'out_msg_nd',
-                         'error']
-
-    def __init__(self, name, in_samples, sendnth=config.default_sendnth,
-                 in_ms=None, start_msgs=None, defines=config.default_defines):
-        TestBenchBase.__init__(self, in_samples, in_ms, defines)
-        debug = ("DEBUG" in defines) and defines["DEBUG"]
-        self.in_width = defines["WIDTH"]
-        self.out_width = defines["WIDTH"]
-        self.sendnth = sendnth
-        self.name = name
-        self.defines = defines
-        self.start_msgs = start_msgs
+    def __init__(self):
         # The MyHDL Signals
-        self.signal_names = self.extra_signal_names + self.base_signal_names
         for sn in self.signal_names:
             if sn.endswith('_n'):
                 setattr(self, sn, Signal(1))
             else:
                 setattr(self, sn, Signal(0))
-        # Set the MyHDL drivers
-        self.drivers = [self.clk_driver, self.get_output, self.check_error,
-                        self.send_input, self.prerun]
 
     def clk_driver(self):
         @always(delay(1))
@@ -134,16 +98,6 @@ class TestBenchIcarusBase(TestBenchBase):
             self.clk.next = not self.clk
         return run
 
-    def check_error(self):
-        self.error_count = 0
-        @always(self.clk.posedge)
-        def run():
-            if self.error_count > 0:
-                raise StandardError("The error wire is high.")
-            if self.error:
-                self.error_count += 1
-        return run
-        
     def run(self, clks):
         """
         Run a test bench simulation.
@@ -167,7 +121,7 @@ class TestBenchIcarusBase(TestBenchBase):
             """
             if self.out_nd:
                 self.out_raw.append(int(self.out_data))
-                if 'out_m' in self.base_signal_names:
+                if 'out_m' in self.signal_names:
                     self.out_ms.append(int(self.out_m))
         return run
 
@@ -183,9 +137,9 @@ class TestBenchIcarusBase(TestBenchBase):
             """
             if not self.doing_prerun:
                 # Send input.
-                if self.count >= self.sendnth and self.datapos < len(self.in_samples):
+                if self.count >= self.sendnth and self.datapos < len(self.in_raw):
                     self.in_data.next = self.in_raw[self.datapos]
-                    if 'in_m' in self.base_signal_names:
+                    if 'in_m' in self.signal_names:
                         self.in_m.next = self.in_ms[self.datapos]
                     self.in_nd.next = 1
                     self.datapos += 1
@@ -195,52 +149,61 @@ class TestBenchIcarusBase(TestBenchBase):
                     self.count += 1
         return run
 
-    def prerun(self):
-        self.first = True
-        self.done_header = False
-        self.doing_prerun = True
-        self.msg_pos = 0
+    def check_error(self):
+        self.error_count = 0
         @always(self.clk.posedge)
         def run():
-            """
-            Sends a reset signal at start.
-            """
-            if self.first:
-                self.first = False
-                self.rst_n.next = 0
-            else:
-                self.rst_n.next = 1
-                self.doing_prerun = False
+            if self.error_count > 0:
+                raise StandardError("The error wire is high.")
+            if self.error:
+                self.error_count += 1
         return run
+        
 
-class TestBenchIcarus(TestBenchIcarusBase):
+class TestBenchIcarusInner(TestBenchIcarusBase):
     """
-    A minimal TestBench to run the module using icarus verilog.
+    A testbench to test a module using Icarus verilog.
+    Separate sample, message and meta data connections.
+    Message can only be sent before sending samples.
 
     Args:
-        name: A name to use with for generated files.
-        in_samples: A list of complex points to send.
-        sendnth: Send an input on every `sendnth` clock cycle.
-        in_ms: A list of the meta data to send.
-        start_msgs: A list of messages to send before sending samples.
-        defines: Macro definitions (constants) to use in verilog code.
+        executable: The Icarus executable
+        in_samples: The input samples.
+        in_ms: The input meta data (same length as in_samples).
+        start_msgs: Messages to send before sending samples.
+        sendnth: How often to send a new sample.
+        width: The width in bits of input data
+        mwidth: The width of meta data
     """
 
-    extra_signal_names = []
-    base_signal_names = ['clk', 'rst_n',
-                         'in_data', 'in_nd', 'in_m', 'in_msg', 'in_msg_nd',
-                         'out_data', 'out_nd', 'out_m', 'out_msg', 'out_msg_nd',
-                         'error']
+    signal_names = ['clk', 'rst_n',
+                    'in_data', 'in_nd', 'in_m', 'in_msg', 'in_msg_nd',
+                    'out_data', 'out_nd', 'out_m', 'out_msg', 'out_msg_nd',
+                    'error']
 
-    def __init__(self, *args, **kwargs):
-        TestBenchIcarusBase.__init__(self, *args, **kwargs)
-        self.drivers.append(self.get_message_stream)
-        self.in_raw = [c_to_int(d, self.in_width/2) for d in self.in_samples]
-                    
-    def run(self, steps_rqd):
-        TestBenchIcarusBase.run(self, steps_rqd)
-        self.out_samples = [(int_to_c(d, self.out_width/2)) for d in self.out_raw]
-        self.out_messages = stream_to_packets(self.out_msgs)
+    def __init__(self, executable, in_samples, in_ms=None, start_msgs=None,
+                 sendnth=config.default_sendnth, width=config.default_width,
+                 mwidth=config.default_mwidth):
+        TestBenchIcarusBase.__init__(self)
+        self.executable = executable
+        self.in_samples = in_samples
+        if in_ms is not None:
+            assert(len(in_samples) == len(in_ms))
+        else:
+            in_ms = [0] * len(in_samples)
+        self.start_msgs = start_msgs
+        self.sendnth = sendnth
+        self.width = width
+        self.mwidth = mwidth
+        # Output arrays
+        self.out_samples = []
+        self.out_ms = []
+        self.out_msgs = []
+        # Set the MyHDL drivers
+        self.drivers = [self.clk_driver, self.get_output, self.check_error,
+                        self.send_input, self.prerun, self.get_message_stream]
+        # ???
+        self.in_raw = [c_to_int(d, self.width/2) for d in self.in_samples]
 
     def get_message_stream(self):
         @always(self.clk.posedge)
@@ -276,91 +239,141 @@ class TestBenchIcarus(TestBenchIcarusBase):
                     self.doing_prerun = False
                     self.in_msg_nd.next = 0
         return run
-        
-class TestBenchIcarusCombined(TestBenchIcarusBase):
+
+class TestBenchIcarusOuter(TestBenchIcarusBase):
     """
-    A minimal TestBench to run the module using icarus verilog.
+    A testbench to test a module using Icarus verilog.
+    Only a single data connection in and out.
+    Shared by data and messages.
+    No possibility to pass meta data currently.
+    Message can only be sent before sending samples.
 
     Args:
-        name: A name to use with for generated files.
-        in_samples: A list of complex points to send.
-        sendnth: Send an input on every `sendnth` clock cycle.
-        in_ms: A list of the meta data to send.
-        start_msgs: A list of messages to send before sending samples.
-        defines: Macro definitions (constants) to use in verilog code.
+        executable: The Icarus executable
+        in_samples: The input samples.
+        start_msgs: Messages to send before sending samples.
+        in_raw: The raw input integers can be specified, instead of
+                in_samples and start_msgs.
+        sendnth: How often to send a new sample.
+        width: The bit width of the input data
     """
 
-    extra_signal_names = []
-    base_signal_names = ['clk', 'rst_n',
-                         'in_data', 'in_nd',
-                         'out_data', 'out_nd',
-                         'error']
+    signal_names = ['clk', 'rst_n',
+                    'in_data', 'in_nd',
+                    'out_data', 'out_nd',
+                    'error']
 
-    def __init__(self, *args, **kwargs):
-        TestBenchIcarusBase.__init__(self, *args, **kwargs)
+    def __init__(self, executable, in_samples=None, start_msgs=None, in_raw=None,
+                 sendnth=config.default_sendnth, width=config.default_width):
+        super(TestBenchIcarusOuter, self).__init__()
+        self.executable = executable
+        self.in_samples = in_samples
+        self.start_msgs = start_msgs
+        self.in_raw = in_raw
+        if (in_raw is not None) and (in_samples is not None or start_msgs is not None):
+            raise ValueError("Cannot specify both (in_samples and/or start_msgs) and in_raw")
+        self.sendnth = sendnth
+        self.width = width
+        # Set the MyHDL drivers
+        self.drivers = [self.clk_driver, self.get_output,
+                        self.send_input, self.prerun, self.check_error]
         # Generate the raw data to send in.
-        self.in_raw = []
-        if self.start_msgs is not None:
-            self.in_raw += self.start_msgs
-        # Subtracting 1 from width since we use 1st bit as a header.
-        self.in_raw += [c_to_int(d, self.in_width/2-1) for d in self.in_samples]
+        if self.in_raw is None:
+            self.in_raw = []
+            if self.start_msgs is not None:
+                self.in_raw += self.start_msgs
+            # Subtracting 1 from width since we use 1st bit as a header.
+            self.in_raw += [c_to_int(d, self.width/2-1) for d in self.in_samples]
 
     def run(self, steps_rqd):
-        TestBenchIcarusBase.run(self, steps_rqd)
-        header_shift = pow(2, self.out_width-1)
-        packets = stream_to_packets(self.out_raw)
-        self.out_samples = []
-        self.out_messages = []
-        for p in packets:
-            if p[0] // header_shift:
-                self.out_messages.append(p)
-            else:
-                # It is a sample
-                assert(len(p) == 1)
-                self.out_samples.append(int_to_c(p[0], self.out_width/2-1))
+        super(TestBenchIcarusOuter, self).run(steps_rqd)
+        header_shift = pow(2, self.width-1)
+        #packets = stream_to_packets(self.out_raw)
+        #self.out_samples = []
+        #self.out_messages = []
+        #for p in packets:
+        #    if p[0] // header_shift:
+        #        self.out_messages.append(p)
+        #    else:
+        #        # It is a sample
+        #        assert(len(p) == 1)
+        #        self.out_samples.append(int_to_c(p[0], self.width/2-1))
     
+    def prerun(self):
+        self.first = True
+        self.done_header = False
+        self.doing_prerun = True
+        self.msg_pos = 0
+        @always(self.clk.posedge)
+        def run():
+            """
+            Sends a reset signal at start.
+            """
+            if self.first:
+                self.first = False
+                self.rst_n.next = 0
+            else:
+                self.rst_n.next = 1
+                self.doing_prerun = False
+        return run
 
-class TestBenchB100(TestBenchBase):
+
+class TestBenchB100(object):
     """
     A minimal TestBench to run the module on the B100 FPGA.
 
     Args:
-        name: A name to use with for generate files.
+        fpga_image: The filename of the fpga_image.
         in_samples: A list of complex points to send.
         start_msgs: A list of messages to send before sending samples.
-        defines: Macro definitions (constants) to use in verilog code.
+        defines: Macro definitions (constants) used in verilog code
+                 (just used for extracting width here).
+        width: Width of input data.
+        in_raw: Raw integers to send instead of in_samples and start_msgs.
     """
     
-    def __init__(self, name, in_samples, start_msgs=None, defines=config.default_defines):
-        in_ms = None
-        TestBenchBase.__init__(self, in_samples, in_ms, start_msgs, defines)
+    def __init__(self, fpgaimage, in_samples=None, start_msgs=None, 
+                 width=config.default_width, in_raw=None):
+        self.fpgaimage = fpgaimage
+        self.in_samples = in_samples
+        self.start_msgs = start_msgs
+        self.width = width
+        self.in_raw = in_raw
         # Generate the raw data to send in.
-        self.name = name
-        self.in_raw = []
-        self.in_width = defines['WIDTH']
-        self.out_width = self.in_width
-        if self.start_msgs is not None:
-            self.in_raw += self.start_msgs
-        # Subtracting 1 from width since we use 1st bit as a header.
-        self.in_raw += [c_to_int(d, self.in_width/2-1) for d in self.in_samples]
+        if in_raw is None:
+            if self.start_msgs is not None:
+                self.in_raw += self.start_msgs
+            # Subtracting 1 from width since we use 1st bit as a header.
+            self.in_raw += [c_to_int(d, self.width/2-1) for d in self.in_samples]
+        self.out_samples = []
+        self.out_ms = []
+        self.out_msgs = []
 
-    def run(self, steps_rqd=None):
+    def run(self, n_receive=None):
+        """
+        Run the simulation.
+        
+        Args:
+            n_receive: Stop after receiving this many samples.
+        """
+        b100.set_image(self.fpgaimage)
         # steps_rqd only in for compatibility
         from gnuradio import gr, uhd
         n_receive = 10000
-
+        # Flip high and low bits of in_raw
+        flipped_raw = flip_bits(self.in_raw, self.width)
+        flipped_raw = unsigned_to_signed(flipped_raw, self.width)
         stream_args = uhd.stream_args(cpu_format='sc16', channels=range(1))
         from_usrp = uhd.usrp_source(device_addr='', stream_args=stream_args)
         head = gr.head(4, n_receive)
         snk = gr.vector_sink_i()
         to_usrp = uhd.usrp_sink(device_addr='', stream_args=stream_args)
-        src = gr.vector_source_i(self.in_raw)
+        src = gr.vector_source_i(flipped_raw)
         tb = gr.top_block()
         tb.connect(from_usrp, head, snk)
         tb.connect(src, to_usrp)
         tb.run()
         self.out_raw = snk.data()
-        
         # Remove 0's
         start_offset = None
         stop_offset = None
@@ -376,15 +389,16 @@ class TestBenchB100(TestBenchBase):
         if start_offset is None or stop_offset is None:
             raise StandardError("Could not find any non-zero returned data.")
         self.out_raw = self.out_raw[start_offset: stop_offset+1]
-
         # Shift to positive integers
         positive = []
         for r in self.out_raw:
             if r < 0:
-                r += pow(2, self.out_width)
+                r += pow(2, self.width)
             positive.append(r)
         self.out_raw = positive
-        header_shift = pow(2, self.out_width-1)
+        # Flip bits in out_raw
+        self.out_raw = flip_bits(self.out_raw, self.width)
+        header_shift = pow(2, self.width-1)
         packets = stream_to_packets(self.out_raw)
         self.out_samples = []
         self.out_messages = []
@@ -394,5 +408,5 @@ class TestBenchB100(TestBenchBase):
             else:
                 # It is a sample
                 assert(len(p) == 1)
-                self.out_samples.append(int_to_c(p[0], self.out_width/2-1))
+                self.out_samples.append(int_to_c(p[0], self.width/2-1))
     
