@@ -24,8 +24,11 @@ class TestNull(unittest.TestCase):
             'uhd', 'null', '-test')
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
-        for tb in (tb_icarus, tb_b100, ):
-            tb.run(5000)
+        for tb, steps in (
+            (tb_icarus, 5000),
+            (tb_b100, 10000),
+            ):
+            tb.run(steps)
             self.assertEqual(len(data), len(tb.out_raw))
             for e, r in zip(data, tb.out_raw):
                 self.assertEqual(e, r)

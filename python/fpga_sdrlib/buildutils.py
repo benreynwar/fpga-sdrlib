@@ -84,6 +84,12 @@ def pd2fn(pck, fn):
     
 def generate_B100_image(package, name, suffix, defines=config.default_defines):
     builddir = os.path.join(config.builddir, package)
+    outputdir = os.path.join(builddir, 'build-B100_{name}{suffix}'.format(
+            name=name, suffix=suffix))
+    vdir = os.path.join(builddir, 'verilog-B100_{name}{suffix}'.format(
+            name=name, suffix=suffix))
+    if not os.path.exists(vdir):
+        os.makedirs(vdir)
     dependencies = compatibles[package][name]
     included_dependencies = set()
     inputfiles = []
@@ -94,13 +100,13 @@ def generate_B100_image(package, name, suffix, defines=config.default_defines):
 
     new_inputfiles= []
     changed = False
-    print(inputfiles)
     for f in inputfiles:
         # Prefix the macros to the beginning of each file.
         # FIXME: There has to be a better way to get this working :(.
         assert(f.endswith('.v'))
-        f2 = f[:-2] + '_prefixed.v'
-        f3 = f[:-2] + '_final.v'
+        bn = os.path.basename(f)
+        f2 = os.path.join(vdir, bn[:-2] + '_prefixed.v')
+        f3 = os.path.join(vdir, bn[:-2] + '_final.v')
         shutil.copyfile(f, f2)
         b100.prefix_defines(f2, defines)
         # See if any of the produced files are different than what
@@ -109,10 +115,8 @@ def generate_B100_image(package, name, suffix, defines=config.default_defines):
             changed = True
             shutil.copyfile(f2, f3)
         new_inputfiles.append(f3)
-    image_fn = os.path.join(
-        builddir, 'build-B100_{name}{suffix}'.format(name=name, suffix=suffix),
-        'B100.bin')
-    if changed:
+    image_fn = os.path.join(outputdir, 'B100.bin')
+    if changed or not os.path.exists(image_fn):
         b100.make_make(name+suffix, builddir, new_inputfiles, defines)
         return b100.synthesise(name+suffix, builddir)
     else:

@@ -267,35 +267,85 @@ class TestSampleMsgSplitter(unittest.TestCase):
     
     def setUp(self):
         self.rg = random.Random(0)
+        top_packet_length = 64
+        n_packets = 2
+        self.width = 32
+        prob_start = 0.1
+        data, packets = generate_random_packets(
+            top_packet_length, n_packets, config.msg_length_width,
+            self.width, prob_start, self.rg, none_sample=False)
+        # Messages get stuck if not flushed with lots of empty packets.
+        flush = [pow(2, self.width-1)]*20000
+        self.packets = packets
+        self.data = data + flush
+        samples, packets = stream_to_samples_and_packets(
+            data, config.msg_length_width, self.width)
+        samples, packets = stream_to_samples_and_packets(
+            self.data, config.msg_length_width, self.width)
 
     def test_sample_msg_splitter(self):
         """
         Tests the sample msg splitter.
 
         Just checks that the samples are correct.
-        Doesn't worry about what happened to the packets
-        other than that they were removed.
         """
-        top_packet_length = 64
-        n_packets = 20
-        width = 32
-        prob_start = 0.1
-        data, packets = generate_random_packets(
-            top_packet_length, n_packets, config.msg_length_width,
-            width, prob_start, self.rg, none_sample=False)
+        # First test qa_wrapper modules that return the samples
         executable = buildutils.generate_icarus_executable(
             'message', 'sample_msg_splitter', '-test')
         fpgaimage = buildutils.generate_B100_image(
             'message', 'sample_msg_splitter', '-test')
-        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
-        tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
-        for tb in (tb_icarus, tb_b100, ):
-            tb.run(5000)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=self.data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=self.data)
+        for tb, steps in (
+            (tb_icarus, 10000),
+            (tb_b100, 10000),
+            ):
+            tb.run(steps)
             samples, packets = stream_to_samples_and_packets(
-                data, config.msg_length_width, width)
+                self.data, config.msg_length_width, self.width)
             self.assertEqual(len(samples), len(tb.out_raw))
             for e, r in zip(samples, tb.out_raw):
                 self.assertEqual(e, r)
+
+    def test_sample_msg_splitter_returns_msgs(self):
+        """
+        Tests the sample msg splitter.
+
+        Just checks that the messages are correct.
+        """
+        # Then test qa_wrapper modules returning the messages.
+        executable = buildutils.generate_icarus_executable(
+            'message', 'sample_msg_splitter_returns_msgs', '-test')
+        fpgaimage = buildutils.generate_B100_image(
+            'message', 'sample_msg_splitter_returns_msgs', '-test')
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=self.data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=self.data)
+        for tb, steps in (
+            (tb_icarus, 10000),
+            (tb_b100, 100), 
+            ):
+            tb.run(steps)
+            packets = stream_to_packets(
+                tb.out_raw, config.msg_length_width, self.width)
+            first_index = None
+            for i, p in enumerate(packets):
+                if len(p) != 1 or p[0] != pow(2, self.width-1):
+                    first_index = i
+                    break
+            last_index = None
+            for i, p in reversed(list(enumerate(packets))):
+                if len(p) != 1 or p[0] != pow(2, self.width-1):
+                    last_index = i+1
+                    break
+            if first_index is None:
+                raise StandardError("No packets found")
+            packets = packets[first_index: last_index]
+            self.assertEqual(len(packets), len(self.packets))
+            for e, r in zip(packets, self.packets):
+                self.assertEqual(len(e), len(r))
+                for ee, rr in zip(e, r):
+                    self.assertEqual(ee, rr)
+        
 
 class TestCombo(unittest.TestCase):
     
@@ -313,17 +363,28 @@ class TestCombo(unittest.TestCase):
         data, packets = generate_random_packets(
             top_packet_length, n_packets, config.msg_length_width,
             width, prob_start, self.rg, none_sample=False)
+        ll = 200
+        data = [8]*ll + data + [8]*ll
+        buffer_length = 128
+        defines = config.updated_defines(
+            {'COMBINER_BUFFER_LENGTH': buffer_length,
+             'LOG_COMBINER_BUFFER_LENGTH': logceil(buffer_length),
+             'MAX_PACKET_LENGTH': pow(2, config.msg_length_width),
+             })
         executable = buildutils.generate_icarus_executable(
-            'message', 'combo', '-test')
+            'message', 'combo', '-test', defines=defines)
         fpgaimage = buildutils.generate_B100_image(
-            'message', 'combo', '-test')
+            'message', 'combo', '-test', defines=defines)
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
-        for tb in (tb_icarus,
-                   tb_b100, ):
-            tb.run(20000)
-            print(data)
-            print(tb.out_raw)
+        for tb, steps in (
+                (tb_icarus, 10000),
+                (tb_b100, 100000), 
+                ):
+            tb.run(steps)
+            print(tb.out_raw[0:100])
+            lenp = sum([len(p) for p in packets])
+            print(len(data), len(tb.out_raw), lenp)
             self.assertEqual(len(data), len(tb.out_raw))
             for e, r in zip(data, tb.out_raw):
                 self.assertEqual(e, r)
@@ -331,7 +392,10 @@ class TestCombo(unittest.TestCase):
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
 
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestCombo)
-    #unittest.TextTestRunner(verbosity=2).run(suite)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestSampleMsgSplitter)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestCombo)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageSlicer)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageStreamCombiner)
+    unittest.TextTestRunner(verbosity=2).run(suite)
 
-    unittest.main()
+    #unittest.main()

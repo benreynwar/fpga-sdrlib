@@ -19,6 +19,8 @@ blocks = {
     # A qa_wrapper module containing just a sample_msg_splitter.
     # Drops the split out messages.
     'qa_sample_msg_splitter.v': (None, copyfile, {}),
+    # Same but drops the samples and returns the messages.
+    'qa_sample_msg_splitter_returns_msgs.v': (None, copyfile, {}),
     # A qa_wrapper module combining a sample_msg_splitter
     # and a message_stream_combiner.
     'qa_combo.v': (None, copyfile, {}),
@@ -28,6 +30,8 @@ blocks = {
 compatibles = {
     'sample_msg_splitter': 
         ('sample_msg_splitter.v', 'qa_sample_msg_splitter.v'),
+    'sample_msg_splitter_returns_msgs': 
+        ('sample_msg_splitter.v', 'qa_sample_msg_splitter_returns_msgs.v'),
     'combo':
         ('sample_msg_splitter.v', 'message_stream_combiner.v', 'qa_combo.v'),
 }

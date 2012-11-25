@@ -53,7 +53,7 @@ module qa_wrapper
    assign after_data = before_samples_shifted; 
   assign after_samples_shifted = {2'b0, after_data[WDTH-1 :WDTH/2+1], after_data[WDTH/2-1 :1]};
    
-   message_stream_combiner #(2, 1, WDTH) message_stream_combiner_0
+   message_stream_combiner #(2, 1, WDTH, `COMBINER_BUFFER_LENGTH, `LOG_COMBINER_BUFFER_LENGTH, `MAX_PACKET_LENGTH, `MSG_LENGTH_WIDTH) message_stream_combiner_0
      (.clk(clk),
       .rst_n(rst_n),
       .in_data({after_samples_shifted, after_msg}),

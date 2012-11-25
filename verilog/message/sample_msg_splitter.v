@@ -39,48 +39,59 @@ module sample_msg_splitter
    
    always @ (posedge clk)
      begin
-        if (in_nd)
-          begin
-             if (in_data[WIDTH-1])
-               begin
-                  // In a header.
-                  packet_length <= in_data[WIDTH-2 -:`MSG_LENGTH_WIDTH];
-                  packet_pos <= 1;
-                  out_msg <= in_data;
-                  out_msg_nd <= 1'b1;
-                  out_samples_nd <= 1'b0;
-                  // Already in a packet but we got a header -> error.
-                  if (packet_pos != 0)
-                    error <= 1'b1;
-               end
-             else
-               begin
-                  if (packet_pos == 0)
-                    begin
-                       out_samples <= in_data;
-                       out_samples_nd <= 1'b1;
-                       out_msg_nd <= 1'b0;
-                    end
-                  else
-                    begin
-                       if (packet_pos == packet_length)
-                         begin
-                            packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
-                            packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
-                         end
-                       else
-                         packet_pos <= packet_pos + 1;
-                       out_msg <= in_data;
-                       out_msg_nd <= 1'b1;
-                       out_samples_nd <= 1'b0;
-                    end
-               end 
-          end 
-        else
+        if (!rst_n)
           begin
              out_samples_nd <= 1'b0;
              out_msg_nd <= 1'b0;
+             packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
+             packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
           end
+        else
+          if (in_nd)
+            begin
+               if (in_data[WIDTH-1])
+                 begin
+                    // In a header.
+                    packet_length <= in_data[WIDTH-2 -:`MSG_LENGTH_WIDTH];
+                    if (in_data[WIDTH-2 -:`MSG_LENGTH_WIDTH] == 0)
+                      packet_pos <= 0;
+                    else
+                      packet_pos <= 1;
+                    out_msg <= in_data;
+                    out_msg_nd <= 1'b1;
+                    out_samples_nd <= 1'b0;
+                    // Already in a packet but we got a header -> error.
+                    if (packet_pos != 0)
+                      error <= 1'b1;
+                 end
+               else
+                 begin
+                    if (packet_pos == 0)
+                      begin
+                         out_samples <= in_data;
+                         out_samples_nd <= 1'b1;
+                         out_msg_nd <= 1'b0;
+                      end
+                    else
+                      begin
+                         if (packet_pos == packet_length)
+                           begin
+                              packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
+                              packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
+                           end
+                         else
+                           packet_pos <= packet_pos + 1;
+                         out_msg <= in_data;
+                         out_msg_nd <= 1'b1;
+                         out_samples_nd <= 1'b0;
+                      end
+                 end 
+            end 
+          else
+            begin
+               out_samples_nd <= 1'b0;
+               out_msg_nd <= 1'b0;
+            end
      end
    
 endmodule

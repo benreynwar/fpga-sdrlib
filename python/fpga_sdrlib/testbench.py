@@ -258,7 +258,7 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
         width: The bit width of the input data
     """
 
-    signal_names = ['clk', 'rst_n',
+    signal_names = ['clk', 'reset',
                     'in_data', 'in_nd',
                     'out_data', 'out_nd',
                     'error']
@@ -311,9 +311,9 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
             """
             if self.first:
                 self.first = False
-                self.rst_n.next = 0
+                self.reset.next = 1
             else:
-                self.rst_n.next = 1
+                self.reset.next = 0
                 self.doing_prerun = False
         return run
 
@@ -359,7 +359,8 @@ class TestBenchB100(object):
         b100.set_image(self.fpgaimage)
         # steps_rqd only in for compatibility
         from gnuradio import gr, uhd
-        n_receive = 10000
+        if n_receive is None:
+            n_receive = 10000
         # Flip high and low bits of in_raw
         flipped_raw = flip_bits(self.in_raw, self.width)
         flipped_raw = unsigned_to_signed(flipped_raw, self.width)
