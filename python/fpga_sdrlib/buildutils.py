@@ -7,7 +7,7 @@ import filecmp
 from jinja2 import Environment, FileSystemLoader
 
 from fpga_sdrlib import config
-from fpga_sdrlib import message, uhd
+from fpga_sdrlib import message, uhd, flow
 from fpga_sdrlib import b100
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,9 @@ def logceil(n):
 def copyfile(directory, name):
     in_fn = os.path.join(config.verilogdir, directory, name)
     out_fn = os.path.join(config.builddir, directory, name)
+    out_dir = os.path.join(config.builddir, directory)
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
     shutil.copyfile(in_fn, out_fn)
     return out_fn                    
 
@@ -152,14 +155,17 @@ def generate_icarus_executable(package, name, suffix, defines=config.default_def
 blocks = {
     'message': message.blocks,
     'uhd': uhd.blocks,
+    'flow': flow.blocks,
     }
 compatibles = {
     'message': message.compatibles,
     'uhd': uhd.compatibles,
+    'flow': flow.compatibles,
     }
 incompatibles = {
     'message': message.incompatibles,
     'uhd': uhd.incompatibles,
+    'flow': flow.incompatibles,
     }
 
 
