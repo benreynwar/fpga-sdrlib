@@ -7,6 +7,73 @@
 // The following LOG_MAX_PACKET_LENGTH bits give the
 // number of WIDTH bit blocks in the packet.
 
+module msc_buffer
+  #(
+    parameter WIDTH = 32,
+    parameter MEM_SIZE = 64,
+    parameter LOG_MEM_SIZE = 6
+    )
+   (
+    input wire              clk,
+    input wire              rst_n,
+    input wire              write_strobe,
+    input wire [WIDTH-1: 0] write_data,
+    input wire              read_delete,
+    output reg              read_full,
+    output reg [WIDTH-1: 0] read_data,
+    output reg              error
+    );
+   
+   reg [WIDTH-1: 0]           RAM[MEM_SIZE-1:0];
+   reg [MEM_SIZE-1: 0]        full;
+   reg [LOG_MEM_SIZE-1: 0]    write_addr;
+   reg [LOG_MEM_SIZE-1: 0]    read_addr;
+
+   always @(posedge clk)
+     if (!rst_n)
+       begin
+          error <= 1'b0;
+          full <= {MEM_SIZE{1'b0}};
+          write_addr <= {LOG_MEM_SIZE{1'b0}};
+          read_addr <= {LOG_MEM_SIZE{1'b0}};
+       end
+     else
+       begin
+          if (write_strobe)
+            begin
+               if (!full[write_addr])
+                 begin
+                    RAM[write_addr] <= write_data;
+                    full[write_addr] <= 1'b1;
+                    write_addr <= write_addr + 1;
+                 end
+               else
+                 error <= 1'b1;
+            end
+          if (read_delete)
+            begin
+               if (full[read_addr])
+                 begin
+                    full[read_addr] <= 1'b0;
+                    read_addr <= read_addr + 1;
+                    read_full <= full[read_addr+1];
+                    read_data <= RAM[read_addr+1];
+                 end
+               else
+                 begin
+                    error <= 1'b1;
+                    read_full <= full[read_addr];
+                    read_data <= RAM[read_addr];
+                 end
+            end
+          else
+            begin
+               read_full <= full[read_addr];
+               read_data <= RAM[read_addr];
+            end
+       end
+endmodule
+
 module message_stream_combiner
   #(
     parameter N_STREAMS = 4,
@@ -24,145 +91,79 @@ module message_stream_combiner
     input wire [N_STREAMS-1:0]       in_nd,
     output reg [WIDTH-1:0]           out_data,
     output reg                       out_nd,
-    output wire                       error       
+    output wire                      error       
     );
 
-   // Input Buffers info
-   reg [WIDTH-1:0]                   input_buffers [INPUT_BUFFER_LENGTH*N_STREAMS-1:0];
-   // When filled and emptied are equal it is empty.
-   // When they are opposite it is full.
-   reg [INPUT_BUFFER_LENGTH-1:0] input_buffers_filled[N_STREAMS-1:0];
-   reg [INPUT_BUFFER_LENGTH-1:0] input_buffers_emptied[N_STREAMS-1:0];
-   wire [INPUT_BUFFER_LENGTH-1:0] input_buffers_full[N_STREAMS-1:0];
-   reg [LOG_INPUT_BUFFER_LENGTH-1:0]       input_buffers_write_pos[N_STREAMS-1:0];
-   reg [LOG_INPUT_BUFFER_LENGTH-1:0]       input_buffers_read_pos[N_STREAMS-1:0];
-   reg [N_STREAMS-1:0]                     stream_errors;                    
+   wire [N_STREAMS-1:0]              stream_errors;
+   reg [N_STREAMS-1: 0]              read_deletes;
+   wire [N_STREAMS-1: 0]             read_fulls;
+   wire [WIDTH-1: 0]                 read_datas[N_STREAMS-1:0];
+   reg [LOG_N_STREAMS-1: 0]          stream;
 
    assign error = | stream_errors;
    
-   genvar                            i, j;
-
-   // Write data to the input buffers.
+   genvar                            i;
+   // Set up the input buffers.
    generate
-      for (j=0; j<N_STREAMS; j=j+1) begin: LOOP_1
-
-         assign input_buffers_full[j] = input_buffers_filled[j] ^ input_buffers_emptied[j];
-
-         initial
-           begin
-              input_buffers_write_pos[j] <= {LOG_INPUT_BUFFER_LENGTH{1'b0}};
-              input_buffers_filled[j] <= {INPUT_BUFFER_LENGTH{1'b0}};
-              input_buffers_emptied[j] <= {INPUT_BUFFER_LENGTH{1'b0}};
-              stream_errors[j] <= 1'b0;
-           end
-
-         always @ (posedge clk)
-           begin
-              if (!rst_n)
-                begin
-                   input_buffers_write_pos[j] <= {LOG_INPUT_BUFFER_LENGTH{1'b0}};
-                   input_buffers_filled[j] <= {INPUT_BUFFER_LENGTH{1'b0}};
-                   input_buffers_emptied[j] <= {INPUT_BUFFER_LENGTH{1'b0}};
-                   stream_errors[j] <= 1'b0;
-                end
-              else
-                if (in_nd[j])
-                  begin
-                     //$display("j is %d input_buffers_full[j] is %d", j, input_buffers_full[j]);
-                     //$display("Stream is %d Input buffer write pos %d full is %d", j, input_buffers_write_pos[j], input_buffers_full[j][input_buffers_write_pos[j]]);
-                     if (!(input_buffers_full[j][input_buffers_write_pos[j]]))
-                       begin
-                          //$display("Write to input buffer %d", in_data[WIDTH*(j+1)-1 -:WIDTH]);
-                          input_buffers[INPUT_BUFFER_LENGTH*j + input_buffers_write_pos[j]] <= in_data[WIDTH*(j+1)-1 -:WIDTH];
-                          input_buffers_write_pos[j] <= input_buffers_write_pos[j] + 1;
-                          input_buffers_filled[j][input_buffers_write_pos[j]] <= ~input_buffers_filled[j][input_buffers_write_pos[j]];
-                       end
-                     else
-                       begin
-                          stream_errors[j] <= 1'b1;
-                       end
-                  end
-           end
+      for (i=0; i<N_STREAMS; i=i+1) begin: LOOP_0
+         msc_buffer #(WIDTH, INPUT_BUFFER_LENGTH, LOG_INPUT_BUFFER_LENGTH)
+         the_buffer 
+         (.clk(clk),
+          .rst_n(rst_n),
+          .write_strobe(in_nd[i]),
+          .write_data(in_data[WIDTH*(i+1)-1 -:WIDTH]),
+          .read_delete(read_deletes[i]),
+          .read_full(read_fulls[i]),
+          .read_data(read_datas[i]),
+          .error(stream_errors[i])
+          );
       end
-   endgenerate
-   
-   // Control stuff
-   reg [LOG_N_STREAMS-1:0]            stream;
-   reg [LOG_MAX_PACKET_LENGTH-1:0]    packet_pos;
-   reg [LOG_MAX_PACKET_LENGTH-1:0]    packet_length;
-   wire [LOG_INPUT_BUFFER_LENGTH+LOG_N_STREAMS-1:0] i_buffer_read_pos;
-   wire [WIDTH-1:0]                                 i_buffer_read;
-   wire [LOG_MAX_PACKET_LENGTH-1:0]                 packet_length_read;
-   wire                                             is_header;
-   
-   assign i_buffer_read_pos = INPUT_BUFFER_LENGTH*stream + input_buffers_read_pos[stream];
-   assign i_buffer_read = input_buffers[i_buffer_read_pos];
-   assign packet_length_read = i_buffer_read[WIDTH-2 -:LOG_MAX_PACKET_LENGTH];
-   assign is_header = i_buffer_read[WIDTH-1];
-   
-   generate
-      for (i=0; i<N_STREAMS; i=i+1) begin: LOOP_2
-   // Move data from the inputs buffers to the output stream.
-
-         initial
-           input_buffers_read_pos[i] <= {LOG_INPUT_BUFFER_LENGTH{1'b0}};
-         
-         always @ (posedge clk)
-           begin
-              if (!rst_n)
-                begin
-                   input_buffers_read_pos[i] <= {LOG_INPUT_BUFFER_LENGTH{1'b0}};
-                end
-              else
-                if (i == stream)
-                  if (input_buffers_full[i][input_buffers_read_pos[i]])
-                    input_buffers_read_pos[i] <= input_buffers_read_pos[i] + 1;
-           end // always @ (posedge clk)
-      end
+      
    endgenerate
 
-   initial
-     begin
-        packet_pos <= {LOG_MAX_PACKET_LENGTH{1'b0}};
-        stream <= {LOG_N_STREAMS{1'b0}};
-     end
-
+   reg just_deleted;
+   reg [LOG_MAX_PACKET_LENGTH-1:0] packet_pos;
+   reg [LOG_MAX_PACKET_LENGTH-1:0] packet_length;
+   
+   // Deal with reading from input buffers.
    always @ (posedge clk)
      begin
         if (!rst_n)
           begin
-             packet_pos <= {LOG_MAX_PACKET_LENGTH{1'b0}};
              stream <= {LOG_N_STREAMS{1'b0}};
+             read_deletes <= {N_STREAMS{1'b0}};
+             just_deleted <= 1'b0;
+             packet_pos <= {LOG_MAX_PACKET_LENGTH{1'b0}};
+             packet_length <= {LOG_MAX_PACKET_LENGTH{1'b0}};
           end
         else
           begin
-             if (input_buffers_full[stream][input_buffers_read_pos[stream]])
+             if (just_deleted)
+               just_deleted <= 1'b0;
+             if ((!just_deleted) && (read_fulls[stream]))
                begin
-                  input_buffers_emptied[stream][input_buffers_read_pos[stream]] <= ~input_buffers_emptied[stream][input_buffers_read_pos[stream]];
-                  out_data <= input_buffers[i_buffer_read_pos];
+                  read_deletes <= {{N_STREAMS-1{1'b0}},{1'b1}} << stream;
+                  just_deleted <= 1'b1;
                   out_nd <= 1'b1;
-                  //This is done in a generate loop where we can reset also.
-                  //input_buffers_read_pos[stream] <= input_buffers_read_pos[stream] + 1;
+                  out_data <= read_datas[stream];
                   if (packet_pos == 0)
                     begin
-                       //$display("Packet pos is 0");
-                       if (is_header)
+                       // Check if header (look at header bit)
+                       if (read_datas[stream][WIDTH-1])
                          begin
-                            //$display("Stream %d - Packet length %d log max %d", stream, packet_length_read, LOG_MAX_PACKET_LENGTH);
-                            packet_length <= packet_length_read;
-                            if (packet_length_read != 0)
+                            packet_length <= read_datas[stream][WIDTH-2 -:LOG_MAX_PACKET_LENGTH];
+                            if (read_datas[stream][WIDTH-2 -:LOG_MAX_PACKET_LENGTH] != 0)
                               packet_pos <= packet_pos + 1;
                          end
                     end // if (packet_pos == 0)
                   else
                     begin
-                       //$display("In a packet");
                        if (packet_pos == packet_length)
                          packet_pos <= 0;
                        else
                          packet_pos <= packet_pos + 1;
                     end
-               end // if (input_buffers_full[i_buffer_read_pos])
+               end
              else
                begin
                   out_nd <= 1'b0;
@@ -173,9 +174,10 @@ module message_stream_combiner
                          stream <= 0;
                        else
                          stream <= stream + 1;
-                       //$display("stream is %d", stream);
                     end
+                  read_deletes <= {N_STREAMS{1'b0}};
                end
           end
      end
+
 endmodule

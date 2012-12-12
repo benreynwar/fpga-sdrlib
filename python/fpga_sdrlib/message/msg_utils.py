@@ -36,6 +36,9 @@ def stream_to_packets(stream, bits_for_length=msg_length_width, width=msg_width,
                 packet = None
                 in_packet = False
                 packet_pos = None
+    if packet is not None:
+        print(packet)
+        raise ValueError("Incomplete packets")
     return packets
 
 def stream_to_samples_and_packets(stream, bits_for_length=msg_length_width, width=msg_width):

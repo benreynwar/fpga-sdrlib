@@ -24,6 +24,12 @@ blocks = {
     # A qa_wrapper module combining a sample_msg_splitter
     # and a message_stream_combiner.
     'qa_combo.v': (None, copyfile, {}),
+    # A qa_wrapper module combining a split
+    # and a message_stream_combiner.
+    'qa_splitcombiner.v': (None, copyfile, {}),
+    # A message_stream_combiner with one empty stream of samples
+    # and another always empty stream.
+    'qa_message_stream_combiner_one.v': (None, copyfile, {}),
     }
 
 # compatible with running on the B100
@@ -34,6 +40,10 @@ compatibles = {
         ('sample_msg_splitter.v', 'qa_sample_msg_splitter_returns_msgs.v'),
     'combo':
         ('sample_msg_splitter.v', 'message_stream_combiner.v', 'qa_combo.v'),
+    'splitcombiner':
+        ('flow/split.v', 'message_stream_combiner.v', 'qa_splitcombiner.v'),
+    'message_stream_combiner_one':
+        ('message_stream_combiner.v', 'qa_message_stream_combiner_one.v'),
 }
 
 # Not compatible with running on the B100

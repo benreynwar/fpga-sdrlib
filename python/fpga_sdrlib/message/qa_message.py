@@ -87,6 +87,28 @@ class TestBenchMessageSlicer(TestBenchIcarusOuter):
                     self.count += 1
         return run
 
+def generate_header(length, bits_for_length, width):
+    info_max = int(pow(2, width-1-bits_for_length)-1)
+    info = random.randint(0, info_max)
+    header = (1 << int(width-1)) + (length << int(width-1-bits_for_length)) + info
+    return header
+
+def generate_random_packet(length, bits_for_length, width):
+    packet = []
+    packet.append(generate_header(length, bits_for_length, width))
+    block_max = int(pow(2, width-1)-1)
+    for j in range(length):
+        d = random.randint(0, block_max)
+        packet.append(d)
+    return packet
+
+def packet_from_content(content, bits_for_length, width):
+    l = len(content)
+    packet = []
+    packet.append(generate_header(l, bits_for_length, width))
+    packet.extend(content)
+    return packet
+
 def generate_random_packets(max_length, n_packets, bits_for_length, width, prob_start=1, myrand=random.Random(), none_sample=True):
     """
     Generate a data stream containing a bunch of random packets.
@@ -96,8 +118,6 @@ def generate_random_packets(max_length, n_packets, bits_for_length, width, prob_
     data = []
     packets = []
     sample_max = int(pow(2, width-2))
-    info_max = int(pow(2, width-1-bits_for_length)-1)
-    block_max = int(pow(2, width-1)-1)
     assert(pow(2, bits_for_length) >= max_length)
     for i in range(n_packets):
         while (myrand.random() > prob_start):
@@ -105,17 +125,9 @@ def generate_random_packets(max_length, n_packets, bits_for_length, width, prob_
                 data.append(None)
             else:
                 data.append(myrand.randint(0, sample_max))
-        packet = []
-        l = myrand.randint(0, max_length-1)
-        info = myrand.randint(0, info_max)
-        # Make header
-        header = (1 << int(width-1)) + (l << int(width-1-bits_for_length)) + info
-        data.append(header)
-        packet.append(header)
-        for j in range(l):
-            d = myrand.randint(0, block_max)
-            data.append(d)
-            packet.append(d)
+        l = myrand.randint(0, max_length)
+        packet = generate_random_packet(l, bits_for_length, width)
+        data.extend(packet)
         packets.append(packet)
     return data, packets
 
@@ -158,14 +170,14 @@ class TestMessageStreamCombiner(unittest.TestCase):
         for r, e in zip(tb.out_raw, data):
             self.assertEqual(e, r)
 
-    def test_streams(self):
+    def atest_streams(self):
         """
         Test the stream combiner a number of streams.
         """
         width = 32
         sendnth = 8
         n_streams = 3
-        buffer_length = 128
+        buffer_length = 32
         max_packet_length = pow(2, config.msg_length_width)
         defines = config.updated_defines(
             {'N_STREAMS': n_streams,
@@ -268,20 +280,17 @@ class TestSampleMsgSplitter(unittest.TestCase):
     def setUp(self):
         self.rg = random.Random(0)
         top_packet_length = 64
-        n_packets = 2
+        n_packets = 10
         self.width = 32
         prob_start = 0.1
         data, packets = generate_random_packets(
             top_packet_length, n_packets, config.msg_length_width,
             self.width, prob_start, self.rg, none_sample=False)
-        # Messages get stuck if not flushed with lots of empty packets.
-        flush = [pow(2, self.width-1)]*20000
-        self.packets = packets
-        self.data = data + flush
-        samples, packets = stream_to_samples_and_packets(
+        self.dummypacket = generate_random_packet(0, config.msg_length_width, self.width)
+        self.original_data = data
+        self.data = data + self.dummypacket * 100000
+        self.samples, self.packets = stream_to_samples_and_packets(
             data, config.msg_length_width, self.width)
-        samples, packets = stream_to_samples_and_packets(
-            self.data, config.msg_length_width, self.width)
 
     def test_sample_msg_splitter(self):
         """
@@ -302,7 +311,7 @@ class TestSampleMsgSplitter(unittest.TestCase):
             ):
             tb.run(steps)
             samples, packets = stream_to_samples_and_packets(
-                self.data, config.msg_length_width, self.width)
+                self.original_data, config.msg_length_width, self.width)
             self.assertEqual(len(samples), len(tb.out_raw))
             for e, r in zip(samples, tb.out_raw):
                 self.assertEqual(e, r)
@@ -322,19 +331,20 @@ class TestSampleMsgSplitter(unittest.TestCase):
         tb_b100 = TestBenchB100(fpgaimage, in_raw=self.data)
         for tb, steps in (
             (tb_icarus, 10000),
-            (tb_b100, 100), 
+            (tb_b100, 1000), 
             ):
             tb.run(steps)
-            packets = stream_to_packets(
+            samples, packets = stream_to_samples_and_packets(
                 tb.out_raw, config.msg_length_width, self.width)
+            self.assertEqual(len(samples), 0)
             first_index = None
             for i, p in enumerate(packets):
-                if len(p) != 1 or p[0] != pow(2, self.width-1):
+                if p != self.dummypacket:
                     first_index = i
                     break
             last_index = None
             for i, p in reversed(list(enumerate(packets))):
-                if len(p) != 1 or p[0] != pow(2, self.width-1):
+                if p != self.dummypacket:
                     last_index = i+1
                     break
             if first_index is None:
@@ -360,11 +370,24 @@ class TestCombo(unittest.TestCase):
         n_packets = 20
         width = 32
         prob_start = 0.1
-        data, packets = generate_random_packets(
-            top_packet_length, n_packets, config.msg_length_width,
-            width, prob_start, self.rg, none_sample=False)
+        #data, packets = generate_random_packets(
+        #    top_packet_length, n_packets, config.msg_length_width,
+        #    width, prob_start, self.rg, none_sample=False)
+        #packet = [2159820100L, 878477756, 600480619, 323465490, 1079538426, 1613128310]
+        flush = [pow(2, width-1)]*20
+        packet = [2159820100L,  878477756, pow(2, 23)+1, 2, 3, 4]
+        packets = [packet]
+        data = range(1, 100)
+        data.extend(packet)
+        data.extend(range(100, 110))
+        #packet.append(generate_header(5, config.msg_length_width, width))
+        #packet.extend(range(1, 5+1))
+        #packets.append(packet)
+        #data = range(1, 100)
+        #data.extend(packet)
+        #data.extend(range(100, 120))
         ll = 200
-        data = [8]*ll + data + [8]*ll
+        padded_data = [0]*ll + data + [0]*ll
         buffer_length = 128
         defines = config.updated_defines(
             {'COMBINER_BUFFER_LENGTH': buffer_length,
@@ -376,26 +399,153 @@ class TestCombo(unittest.TestCase):
         fpgaimage = buildutils.generate_B100_image(
             'message', 'combo', '-test', defines=defines)
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=padded_data)
+        for tb, steps in (
+                #(tb_icarus, 10000),
+                (tb_b100, 100000), 
+                ):
+            tb.run(steps)
+            e_samples, e_packets = stream_to_samples_and_packets(
+                data, config.msg_length_width, width)
+            r_samples, r_packets = stream_to_samples_and_packets(
+                tb.out_raw, config.msg_length_width, width)
+            print("Out Raw")
+            print(tb.out_raw)
+            print("E packets")
+            print(e_packets)
+            print("R packets")
+            print(r_packets)
+            print("E samples")
+            print(e_samples)
+            print("R samples")
+            print(r_samples)
+            
+            # Confirm all the samples are equal.
+            self.assertEqual(len(e_samples), len(r_samples))
+            for e, r in zip(e_samples, r_samples):
+                self.assertEqual(e, r)
+            # Confirm all the packets are equal.
+            self.assertEqual(len(e_packets), len(r_packets))
+            for ep, rp in zip(e_packets, r_packets):
+                self.assertEqual(len(ep), len(rp))
+                for e, r in zip(ep, rp):
+                    self.assertEqual(e, r)
+
+class TestSplitCombiner(unittest.TestCase):
+    
+    def test_one(self):
+        """
+        Tests split module and message stream combiner together.
+        """
+        width = 32
+        max_packet_length = 2
+        n_packets = 2
+        data1 = []
+        for i in range(n_packets):
+            length = random.randint(0, max_packet_length)
+            packet = generate_random_packet(length, config.msg_length_width,
+                                            width)
+            data1.extend(packet)
+        data1 = packet
+        max_val = pow(2, width-1)
+        data2 = [random.randint(0, max_val) for i in range(len(data1))]
+        data1 = [1,2,3,4]
+        data2 = [5, 6, 7, 8]
+        i_data = []
+        for d1, d2 in zip(data1, data2):
+            i_data.append(d1)
+            i_data.append(d2)
+        a_data = data1 + data2
+        padded_data = a_data + [0]*1000
+        buffer_length = 128
+        defines = config.updated_defines(
+            {'COMBINER_BUFFER_LENGTH': buffer_length,
+             'LOG_COMBINER_BUFFER_LENGTH': logceil(buffer_length),
+             'MAX_PACKET_LENGTH': pow(2, config.msg_length_width),
+             })
+        executable = buildutils.generate_icarus_executable(
+            'message', 'splitcombiner', '-test', defines=defines)
+        fpgaimage = buildutils.generate_B100_image(
+            'message', 'splitcombiner', '-test', defines=defines)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=i_data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=padded_data)
+        for tb, steps in (
+                #(tb_icarus, 1000),
+                (tb_b100, 100000), 
+                ):
+            tb.run(steps)
+            e_samples, e_packets = stream_to_samples_and_packets(
+                a_data, config.msg_length_width, width)
+            r_samples, r_packets = stream_to_samples_and_packets(
+                tb.out_raw, config.msg_length_width, width)
+            print(i_data)
+            print(e_samples)
+            print(r_samples)
+            print(e_packets)
+            print(r_packets)
+            # Confirm all the samples are equal.
+            self.assertEqual(len(e_samples), len(r_samples))
+            for e, r in zip(e_samples, r_samples):
+                self.assertEqual(e, r)
+            # Confirm all the packets are equal.
+            self.assertEqual(len(e_packets), len(r_packets))
+            for ep, rp in zip(e_packets, r_packets):
+                self.assertEqual(len(ep), len(rp))
+                for e, r in zip(ep, rp):
+                    self.assertEqual(e, r)
+
+class TestMessageStreamCombinerOne(unittest.TestCase):
+    """
+    Tests a message_stream_combiner block.
+    It is combining two streams.
+    One we are sending and the other is always empty.
+    """
+
+    def setUp(self):
+        self.rg = random.Random(0)
+
+    def test_one(self):
+        #data = range(1, 1001)
+
+        packet = [2159820100L,  878477756, pow(2, 23)+1, 2, 3, 4]
+        packets = [packet]*10
+        data = range(1, 100)
+        for packet in packets:
+            data.extend(packet)
+            data.extend(range(100, 110))
+
+        buffer_length = 128
+        defines = config.updated_defines(
+            {'COMBINER_BUFFER_LENGTH': buffer_length,
+             'LOG_COMBINER_BUFFER_LENGTH': logceil(buffer_length),
+             'MAX_PACKET_LENGTH': pow(2, config.msg_length_width),
+             })
+        executable = buildutils.generate_icarus_executable(
+            'message', 'message_stream_combiner_one', '-72', defines=defines)
+        fpgaimage = buildutils.generate_B100_image(
+            'message', 'message_stream_combiner_one', '-72', defines=defines)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
+
         for tb, steps in (
                 (tb_icarus, 10000),
                 (tb_b100, 100000), 
                 ):
             tb.run(steps)
-            print(tb.out_raw[0:100])
-            lenp = sum([len(p) for p in packets])
-            print(len(data), len(tb.out_raw), lenp)
             self.assertEqual(len(data), len(tb.out_raw))
             for e, r in zip(data, tb.out_raw):
                 self.assertEqual(e, r)
+
+
 
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
 
     #suite = unittest.TestLoader().loadTestsFromTestCase(TestSampleMsgSplitter)
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestCombo)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestCombo)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestSplitCombiner)
     #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageSlicer)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageStreamCombiner)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageStreamCombinerOne)
     unittest.TextTestRunner(verbosity=2).run(suite)
 
     #unittest.main()

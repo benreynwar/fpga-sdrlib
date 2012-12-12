@@ -29,14 +29,6 @@ module sample_msg_splitter
    reg [`MSG_LENGTH_WIDTH-1:0] packet_pos;
    reg [`MSG_LENGTH_WIDTH-1:0] packet_length;
 
-   initial
-     begin
-        out_samples_nd <= 1'b0;
-        out_msg_nd <= 1'b0;
-        packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
-        packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
-     end
-   
    always @ (posedge clk)
      begin
         if (!rst_n)
