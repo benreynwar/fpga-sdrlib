@@ -65,7 +65,7 @@ class TestSplit(unittest.TestCase):
         # Work out what the expected result is.
         # We don't know which stream will be returned.
         expected_data = data[::2]
-        alt_expected_data = data[::2]
+        alt_expected_data = data[1::2]
         # How many steps are required to simulate the data.
         steps_rqd = n_data * sendnth * 2 + 1000
         # Create, setup and simulate the test bench.
