@@ -10,7 +10,7 @@ def copyfile(pck, fn):
 
 blocks = {
     # The basic modules.
-    'message_stream_combiner.v': (None, copyfile, {}),
+    'message_stream_combiner.v': (('flow/buffer_AA.v',), copyfile, {}),
     'message_slicer.v': (None, copyfile, {}),
     'sample_msg_splitter.v': (None, copyfile, {}),
     # Some dut's for incompatible icarus simulations.

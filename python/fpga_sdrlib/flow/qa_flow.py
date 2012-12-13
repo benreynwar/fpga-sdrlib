@@ -97,8 +97,48 @@ class TestSplit(unittest.TestCase):
                 else:
                     self.assertEqual(a, r)
 
+class TestBufferAA(unittest.TestCase):
+
+    def test_one(self):
+        """
+        Test the buffer_AA module.
+        """
+        width = config.default_width
+        sendnth = 1
+        maxint = pow(2, width-1)-1
+        buffer_length = 32
+        n_data = 100
+        data = [random.randint(1, maxint) for d in range(n_data)]
+        # How many steps are required to simulate the data.
+        steps_rqd = n_data * sendnth * 2 + 1000
+        # Create, setup and simulate the test bench.
+        defines = config.updated_defines(
+            {'WIDTH': width,
+             'BUFFER_LENGTH': buffer_length,
+             'LOG_BUFFER_LENGTH': logceil(buffer_length),
+             'WRITEERRORCODE': 666,
+             'READERRORCODE': 777,
+             })
+        executable = buildutils.generate_icarus_executable(
+            'flow', 'buffer_AA', '-test', defines=defines)
+        fpgaimage = buildutils.generate_B100_image(
+            'flow', 'buffer_AA', '-test', defines=defines)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
+        for tb, steps in (
+                (tb_icarus, steps_rqd),
+                (tb_b100, 100000), 
+                ):
+            tb.run(steps)
+            # Confirm that our data is correct.
+            stream = None
+            self.assertEqual(len(tb.out_raw), len(data))
+            for r, e in zip(tb.out_raw, data):
+                self.assertEqual(e, r)
+
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestSplit)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestSplit)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestBufferAA)
     unittest.TextTestRunner(verbosity=2).run(suite)
     #unittest.main()

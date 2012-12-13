@@ -15,12 +15,18 @@ blocks = {
     'dut_split.v': (None, copyfile, {}),
     # A qa_wrapper that returns the first output from the splitter.
     'qa_split.v': (None, copyfile, {}),
+    # A buffer.
+    'buffer_AA.v': (None, copyfile, {}),
+    # A qa_wrapper for buffer_AA
+    'qa_buffer_AA.v': (('buffer_AA.v',), copyfile, {}),
     }
 
 # compatible with running on the B100
 compatibles = {
     'split_return_one':
         ('qa_split.v', 'split.v'),
+    'buffer_AA':
+        ('qa_buffer_AA.v', ),
 }
 
 # Not compatible with running on the B100
