@@ -19,6 +19,8 @@ blocks = {
     'buffer_AA.v': (None, copyfile, {}),
     # A qa_wrapper for buffer_AA
     'qa_buffer_AA.v': (('buffer_AA.v',), copyfile, {}),
+    # A qa_wrapper for buffer_AA that empties the buffer in bursts.
+    'qa_buffer_AA_burst.v': (('buffer_AA.v',), copyfile, {}),
     }
 
 # compatible with running on the B100
@@ -27,6 +29,8 @@ compatibles = {
         ('qa_split.v', 'split.v'),
     'buffer_AA':
         ('qa_buffer_AA.v', ),
+    'buffer_AA_burst':
+        ('qa_buffer_AA_burst.v', ),
 }
 
 # Not compatible with running on the B100
