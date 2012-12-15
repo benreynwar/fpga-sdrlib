@@ -17,6 +17,7 @@ default_sendnth = 4
 default_width = 32
 default_mwidth = 1
 default_debug = False
+default_log_sendnth = 6
 msg_width = 32
 msg_length_width = 10
 msg_formatcode_width = 4
@@ -36,6 +37,7 @@ default_defines = {
     'MSG_MODULECODE_WIDTH': msg_modulecode_width,
     'MSG_ERRORCODE_WIDTH': msg_errorcode_width,
     'MSG_SHIFT': msg_shift,
+    'LOG_SENDNTH': default_log_sendnth,
     }
 
 def updated_defines(updates):

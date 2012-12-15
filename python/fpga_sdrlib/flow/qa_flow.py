@@ -57,7 +57,7 @@ class TestSplit(unittest.TestCase):
         """
         width = config.default_width
         sendnth = 4
-        maxint = pow(2, width-1)-1
+        maxint = pow(2, width)-1
         n_data = 100
         n_streams = 2
         data = [random.randint(0, maxint) for d in range(n_data)]
@@ -76,7 +76,7 @@ class TestSplit(unittest.TestCase):
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'split_return_one', '-test', defines=defines)
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
-        tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),
                 (tb_b100, 100000), 
@@ -104,7 +104,7 @@ class TestBufferAA(unittest.TestCase):
         """
         width = config.default_width
         sendnth = 1
-        maxint = pow(2, width-1)-1
+        maxint = pow(2, width)-1
         buffer_length = 32
         n_data = 100
         data = [random.randint(1, maxint) for d in range(n_data)]
@@ -122,8 +122,9 @@ class TestBufferAA(unittest.TestCase):
             'flow', 'buffer_AA', '-test', defines=defines)
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'buffer_AA', '-test', defines=defines)
+        #fpgaimage = "/home/ben/Code/fpga-sdrlib/build/flow/build-B100_buffer_AA-test/B100.bin"
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
-        tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),
                 (tb_b100, 100000), 
@@ -141,7 +142,7 @@ class TestBufferAA(unittest.TestCase):
         """
         width = config.default_width
         sendnth = 1
-        maxint = pow(2, width-1)-1
+        maxint = pow(2, width)-1
         buffer_length = 32
         burst_length = 4
         n_data = 100
@@ -162,7 +163,7 @@ class TestBufferAA(unittest.TestCase):
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'buffer_AA_burst', '-test', defines=defines)
         tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
-        tb_b100 = TestBenchB100(fpgaimage, in_raw=data)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),
                 (tb_b100, 100000), 

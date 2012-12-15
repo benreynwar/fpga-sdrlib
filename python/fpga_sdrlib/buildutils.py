@@ -95,12 +95,11 @@ def generate_B100_image(package, name, suffix, defines=config.default_defines):
         os.makedirs(vdir)
     dependencies = compatibles[package][name]
     included_dependencies = set()
-    inputfiles = []
+    inputfiles = [os.path.join(pd2fn('uhd', 'u1plus_core_QA.v'))]
     for d in dependencies:
         pck, fn = d2pd(package, d)
         if (pck, fn) not in included_dependencies:
             generate_block(pck, fn, included_dependencies, inputfiles)
-
     new_inputfiles= []
     changed = False
     for f in inputfiles:

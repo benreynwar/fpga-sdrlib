@@ -19,7 +19,7 @@ class TestNull(unittest.TestCase):
     def setUp(self):
         self.rg = random.Random(0)
 
-    def stest_null(self):
+    def atest_null(self):
         """
         Tests the null qa_wrapper.
         """
@@ -56,7 +56,7 @@ class TestNull(unittest.TestCase):
              'LOG_WIDTH': logceil(width),
              'ERRORCODE': 666,
              'WIDTH': width,
-             'LOG_SENDNTH': 8,
+             'LOG_SENDNTH': 12,
              })
         executable = buildutils.generate_icarus_executable(
             'uhd', 'bits', '-test', defines=defines)
@@ -83,8 +83,12 @@ class TestNull(unittest.TestCase):
             out = tb.out_raw[start_pos: stop_pos + 2*width]
             bitted = [out[i*2*width+1:(i+1)*2*width+1:2] for i in range(len(out)/width/2)]
             poses = [out[i*2*width:(i+1)*2*width:2] for i in range(len(out)/width/2)]
-            for p in poses:
-                self.assertEqual(p, [31-x for x in range(32)])
+            expected = [31-x for x in range(32)]
+            for i, p in enumerate(poses):
+                if (p != expected):
+                    print(i)
+                    print(p)
+                self.assertEqual(p, expected)
             r_ints = [bits_to_int(bits) for bits in bitted]
             r_ints = [x for x in r_ints if x != 0]
             self.assertEqual(len(data), len(r_ints))

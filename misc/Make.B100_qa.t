@@ -50,7 +50,6 @@ simulator "ISE Simulator (VHDL/Verilog)" \
 ##################################################
 TOP_SRCS = \
 B100.v \
-$(CUSTOM_SRC_DIR)/u1plus_core_QA.v \
 {% for f in inputfiles %}{{f}} \
 {% endfor %}B100.ucf \
 timing.ucf

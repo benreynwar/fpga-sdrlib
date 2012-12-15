@@ -138,12 +138,16 @@ class TestBenchIcarusBase(object):
             if not self.doing_prerun:
                 # Send input.
                 if self.count >= self.sendnth and self.datapos < len(self.in_raw):
-                    self.in_data.next = self.in_raw[self.datapos]
-                    if 'in_m' in self.signal_names:
-                        self.in_m.next = self.in_ms[self.datapos]
-                    self.in_nd.next = 1
-                    self.datapos += 1
-                    self.count = 0
+                    if self.in_raw[self.datapos]is not None:
+                        self.in_data.next = self.in_raw[self.datapos]
+                        if 'in_m' in self.signal_names:
+                            self.in_m.next = self.in_ms[self.datapos]
+                        self.in_nd.next = 1
+                        self.count = 0
+                        self.datapos += 1
+                    else:
+                        self.datapos += 1
+                        self.in_nd.next = 0
                 else:
                     self.in_nd.next = 0
                     self.count += 1
@@ -330,15 +334,17 @@ class TestBenchB100(object):
                  (just used for extracting width here).
         width: Width of input data.
         in_raw: Raw integers to send instead of in_samples and start_msgs.
+        output_msgs: Parse the output for messages.
     """
     
     def __init__(self, fpgaimage, in_samples=None, start_msgs=None, 
-                 width=config.default_width, in_raw=None):
+                 width=config.default_width, in_raw=None, output_msgs=True):
         self.fpgaimage = fpgaimage
         self.in_samples = in_samples
         self.start_msgs = start_msgs
         self.width = width
         self.in_raw = in_raw
+        self.output_msgs = output_msgs
         # Generate the raw data to send in.
         if in_raw is None:
             if self.start_msgs is not None:
@@ -399,15 +405,16 @@ class TestBenchB100(object):
         self.out_raw = positive
         # Flip bits in out_raw
         self.out_raw = flip_bits(self.out_raw, self.width)
-        header_shift = pow(2, self.width-1)
-        packets = stream_to_packets(self.out_raw)
-        self.out_samples = []
-        self.out_messages = []
-        for p in packets:
-            if p[0] // header_shift:
-                self.out_messages.append(p)
-            else:
-                # It is a sample
-                assert(len(p) == 1)
-                self.out_samples.append(int_to_c(p[0], self.width/2-1))
+        if self.output_msgs:
+            header_shift = pow(2, self.width-1)
+            packets = stream_to_packets(self.out_raw)
+            self.out_samples = []
+            self.out_messages = []
+            for p in packets:
+                if p[0] // header_shift:
+                    self.out_messages.append(p)
+                else:
+                    # It is a sample
+                    assert(len(p) == 1)
+                    self.out_samples.append(int_to_c(p[0], self.width/2-1))
     
