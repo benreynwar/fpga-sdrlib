@@ -10,9 +10,11 @@ def copyfile(pck, fn):
 blocks = {
     'dut_qa_wrapper.v': (None, copyfile, {}),
     'qa_wrapper_null.v': (None, copyfile, {}),
+    'qa_wrapper_bits.v': (None, copyfile, {}),
     }
 
 compatibles = {
     'null': ('qa_wrapper_null.v',),
+    'bits': ('qa_wrapper_bits.v',),
     }
 incompatibles = {}

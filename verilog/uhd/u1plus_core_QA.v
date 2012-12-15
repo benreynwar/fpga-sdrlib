@@ -211,7 +211,7 @@ module u1plus_core
          wire [31:0] sample_rx;
          // The length of this register determines how often we process an entry.
          // It would be nice to have this adjustable.
-         reg [5:0]  strobe_counter;
+         reg [`LOG_SENDNTH:0]  strobe_counter;
          wire        strobe_rx;
          wire       clear_rx;
          wire [35:0] vita_rx_data;
