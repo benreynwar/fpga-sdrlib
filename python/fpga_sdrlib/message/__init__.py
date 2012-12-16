@@ -30,6 +30,10 @@ blocks = {
     # A message_stream_combiner with one empty stream of samples
     # and another always empty stream.
     'qa_message_stream_combiner_one.v': (None, copyfile, {}),
+    # A message_stream_combiner with one empty stream of samples
+    # and another always empty stream then put through the bits module
+    # so we can see the individual bits.
+    'qa_message_stream_combiner_bits.v': (None, copyfile, {}),
     }
 
 # compatible with running on the B100
@@ -44,6 +48,8 @@ compatibles = {
         ('flow/split.v', 'message_stream_combiner.v', 'qa_splitcombiner.v'),
     'message_stream_combiner_one':
         ('message_stream_combiner.v', 'qa_message_stream_combiner_one.v'),
+    'message_stream_combiner_bits':
+        ('message_stream_combiner.v', 'qa_message_stream_combiner_bits.v', 'uhd/bits.v'),
 }
 
 # Not compatible with running on the B100

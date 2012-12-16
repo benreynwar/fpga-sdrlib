@@ -9,18 +9,20 @@ module qa_wrapper
     parameter WDTH = 32
     )
    (
-    input wire             clk,
-    input wire             reset,
-    input wire [WDTH-1:0]  in_data,
-    input wire             in_nd,
-    output wire [WDTH-1:0] out_data,
-    output wire            out_nd
+    input wire            clk,
+    input wire            reset,
+    input wire [WDTH-1:0] in_data,
+    input wire            in_nd,
+    output reg [WDTH-1:0] out_data,
+    output reg            out_nd
     );
 
    // Separate the input stream into a sample stream and a message stream.
 
    wire [WDTH-1:0]         mid1_data;
    wire [WDTH-1:0]         mid2_data;
+   wire [WDTH-1:0]         staged_data;
+   wire                    staged_nd;
    wire                    mid_nd;
    wire                    splitter_error;
    
@@ -44,9 +46,23 @@ module qa_wrapper
       .rst_n(rst_n),
       .in_data({mid1_data, mid2_data}),
       .in_nd({mid_nd, mid_nd}),
-      .out_data(out_data),
-      .out_nd(out_nd),
+      .out_data(staged_data),
+      .out_nd(staged_nd),
       .error(combiner_error)
       );
+
+   always @ (posedge clk)
+     begin
+        if (combiner_error)
+          begin
+             out_nd <= 1'b1;
+             out_data <= `ERRORCODE;
+          end
+        else
+          begin
+             out_nd <= staged_nd;
+             out_data <= staged_data;
+          end
+     end
 
 endmodule

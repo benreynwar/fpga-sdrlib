@@ -33,13 +33,6 @@ module message_slicer
 
    assign buffer_full = buffer_filled ^ buffer_emptied;
 
-   initial
-     begin
-        buffer_filled <= {N_SLICES{1'b0}};
-        buffer_write_pos <= {LOG_BUFFER_LENGTH{1'b0}};
-        old_nd <= 1'b0;
-     end
-   
    // Write data to the buffer.
    always @ (posedge clk)
      begin

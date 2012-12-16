@@ -27,12 +27,15 @@ module message_stream_combiner
     output wire                      error       
     );
 
+   wire [N_STREAMS-1:0]              stream_write_errors;
+   wire [N_STREAMS-1:0]              stream_read_errors;
    wire [N_STREAMS-1:0]              stream_errors;
    reg [N_STREAMS-1: 0]              read_deletes;
    wire [N_STREAMS-1: 0]             read_fulls;
    wire [WIDTH-1: 0]                 read_datas[N_STREAMS-1:0];
    reg [LOG_N_STREAMS-1: 0]          stream;
 
+   assign stream_errors = stream_write_errors | stream_read_errors;
    assign error = | stream_errors;
    
    genvar                            i;
@@ -48,7 +51,8 @@ module message_stream_combiner
           .read_delete(read_deletes[i]),
           .read_full(read_fulls[i]),
           .read_data(read_datas[i]),
-          .error(stream_errors[i])
+          .write_error(stream_write_errors[i]),
+          .read_error(stream_read_errors[i])
           );
       end
       
@@ -56,7 +60,16 @@ module message_stream_combiner
 
    reg [LOG_MAX_PACKET_LENGTH-1:0] packet_pos;
    reg [LOG_MAX_PACKET_LENGTH-1:0] packet_length;
-   
+   wire                            is_header;
+   wire [WIDTH-1:0]                temp_is_header;
+
+   // If I use is_header = read_datas[stream][WIDTH-1] it seems to pick up
+   // the least significant bit (irrespective of the value in the second
+   // bracket) when I synthesise (but not simulate in Icarus).  So I'm using
+   // this alternate method.
+   assign temp_is_header = read_datas[stream] >> (WIDTH-1);
+   assign is_header = temp_is_header;
+
    // Deal with reading from input buffers.
    always @ (posedge clk)
      begin
@@ -79,19 +92,15 @@ module message_stream_combiner
                   if (packet_pos == 0)
                     begin
                        // Check if header (look at header bit)
-                       if (read_datas[stream][WIDTH-1])
+                       if (is_header)
                          begin
                             packet_length <= read_datas[stream][WIDTH-2 -:LOG_MAX_PACKET_LENGTH];
-                            //out_data <= 111;
                             if (read_datas[stream][WIDTH-2 -:LOG_MAX_PACKET_LENGTH] != 0)
                               packet_pos <= packet_pos + 1;
                          end
-                       //else
-                         //out_data <= 222;
                     end // if (packet_pos == 0)
                   else
                     begin
-                       //out_data <= 333;
                        if (packet_pos == packet_length)
                          packet_pos <= 0;
                        else
