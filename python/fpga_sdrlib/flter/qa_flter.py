@@ -40,14 +40,18 @@ class TestFilter(unittest.TestCase):
         """
         width = config.default_width
         sendnth = config.default_sendnth
-        taps = [1, 0, 0, 0]
+        # Changing filter_length will require resynthesis.
+        filter_length = 4
+        taps = [random.random()*2-1 for i in range(filter_length)]
+        total = sum([abs(t) for t in taps])
+        taps = [t/total for t in taps]
         filter_length = len(taps)
         # Arguments used for producing verilog from templates.
         extraargs = {'summult_length': filter_length,}
         # Amount of data to send.
         n_data = 10
         # Define the input
-        in_samples = [float(i)/n_data for i in range(n_data)]
+        in_samples = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
         steps_rqd = len(in_samples)*sendnth + 100
         # Define meta data
         mwidth = 1
@@ -76,7 +80,7 @@ class TestFilter(unittest.TestCase):
             # Confirm that our data is correct.
             self.assertEqual(len(tb.out_samples), len(expected))
             for r, e in zip(tb.out_samples, expected):
-                self.assertEqual(e, r)
+                self.assertAlmostEqual(e, r, 3)
 
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)

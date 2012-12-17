@@ -72,7 +72,6 @@ module summult
           // The output should be ready from the multiplier.
           if (p_nd[1])
             begin
-               //$display("Out data is %d %d", {{real_sum}}, {{imag_sum}});
                //out_data_re <= x_re_y[0] + x_re_y[1] + ...
                out_data_re <= {{real_sum}};
                //out_data_re <= x_im_y[0] + x_im_y[1] + ...

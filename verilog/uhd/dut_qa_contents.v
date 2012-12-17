@@ -14,7 +14,7 @@ module dut_qa_contents;
    wire [`MWIDTH-1:0]    out_m;
    wire [`MSG_WIDTH-1:0] out_msg;
    wire                  out_msg_nd;
-   wire                  erro;
+   wire                  error;
    
    initial begin
 	  $from_myhdl(clk, rst_n, in_data, in_nd, in_m, in_msg, in_msg_nd);
@@ -25,7 +25,7 @@ module dut_qa_contents;
      (.clk(clk),
       .rst_n(rst_n),
       .in_data(in_data),
-      .in_nd(i_nd),
+      .in_nd(in_nd),
       .in_m(in_m),
       .in_msg(in_msg),
       .in_msg_nd(in_msg_nd),

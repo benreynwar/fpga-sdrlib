@@ -220,6 +220,13 @@ class TestBenchIcarusInner(TestBenchIcarusBase):
                 self.out_msgs.append(int(self.out_msg))
         return run
 
+    def run(self, clks):
+        """
+        Run a test bench simulation.
+        """
+        TestBenchIcarusBase.run(self, clks)
+        self.out_samples = [int_to_c(r, self.width/2) for r in self.out_raw]
+
     def prerun(self):
         self.first = True
         self.done_header = False

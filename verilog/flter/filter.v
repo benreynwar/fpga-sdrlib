@@ -33,7 +33,6 @@ module filter
    reg [WIDTH*(FLTLEN-1)-1:0]   history;
    reg                          in_nd_old;
    reg [WIDTH*(FLTLEN-1)-1:0]   shifted_history;
-   wire [WIDTH*(FLTLEN-1)-1:0]  mult_history;
    wire                         in_first_filter;
    
    // Tap values are set by the in_msg and in_msg_nd wires.
@@ -51,13 +50,13 @@ module filter
    assign signed_msg = in_msg;
    assign small_signed_msg = signed_msg;
 
-   initial
-     begin
-        setting_taps <= 1'b0;
-        tap_set_error <= 1'b0;
-     end
    always @ (posedge clk)
-     if (in_msg_nd)
+     if (!rst_n)
+       begin
+          setting_taps <= 1'b0;
+          tap_set_error <= 1'b0;
+       end
+     else if (in_msg_nd)
        begin
           // If first bit is 1 then this is a header so we start reseting taps.
           if (in_msg[`MSG_WIDTH-1])
@@ -108,7 +107,7 @@ module filter
       .rst_n(rst_n),
       .in_nd(in_nd),
       .in_m({in_m}),
-      .in_xs({mult_history, in_data}),
+      .in_xs({history, in_data}),
       .in_ys(tapvalues),
       .out_data(out_data),
       .out_nd(out_nd),
