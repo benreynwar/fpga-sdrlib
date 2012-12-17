@@ -7,9 +7,10 @@ import unittest
 import logging
 import shutil
 
+
 from fpga_sdrlib.generate import logceil
 from fpga_sdrlib import config, b100, buildutils
-from fpga_sdrlib.message.msg_utils import stream_to_packets, make_packet_dict, stream_to_samples_and_packets
+from fgpa_sdrlib.message import msg_utils
 from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusOuter
 from fpga_sdrlib.uhd.qa_uhd import bits_to_int
 
@@ -88,50 +89,6 @@ class TestBenchMessageSlicer(TestBenchIcarusOuter):
                     self.count += 1
         return run
 
-def generate_header(length, bits_for_length, width):
-    info_max = int(pow(2, width-1-bits_for_length)-1)
-    info = random.randint(0, info_max)
-    header = (1 << int(width-1)) + (length << int(width-1-bits_for_length)) + info
-    return header
-
-def generate_random_packet(length, bits_for_length, width):
-    packet = []
-    packet.append(generate_header(length, bits_for_length, width))
-    block_max = int(pow(2, width-1)-1)
-    for j in range(length):
-        d = random.randint(0, block_max)
-        packet.append(d)
-    return packet
-
-def packet_from_content(content, bits_for_length, width):
-    l = len(content)
-    packet = []
-    packet.append(generate_header(l, bits_for_length, width))
-    packet.extend(content)
-    return packet
-
-def generate_random_packets(max_length, n_packets, bits_for_length, width, prob_start=1, myrand=random.Random(), none_sample=True):
-    """
-    Generate a data stream containing a bunch of random packets.
-    The lengths are distributed uniformly up to max_length-1.
-
-    """
-    data = []
-    packets = []
-    sample_max = int(pow(2, width-2))
-    assert(pow(2, bits_for_length) >= max_length)
-    for i in range(n_packets):
-        while (myrand.random() > prob_start):
-            if none_sample:
-                data.append(None)
-            else:
-                data.append(myrand.randint(0, sample_max))
-        l = myrand.randint(0, max_length)
-        packet = generate_random_packet(l, bits_for_length, width)
-        data.extend(packet)
-        packets.append(packet)
-    return data, packets
-
 
 class TestMessageStreamCombiner(unittest.TestCase):
 
@@ -164,7 +121,8 @@ class TestMessageStreamCombiner(unittest.TestCase):
              })
         executable = buildutils.generate_icarus_executable(
             'message', 'message_stream_combiner', '-one_stream', defines)
-        tb = TestBenchIcarusOuter(executable, in_raw=data, width=width)
+        tb = TestBenchIcarusOuter(executable, in_raw=data, width=width,
+                                  output_msgs=False)
         tb.run(steps_rqd)
         # Confirm that our data is correct.
         self.assertEqual(len(tb.out_raw), len(data))
@@ -201,7 +159,7 @@ class TestMessageStreamCombiner(unittest.TestCase):
         for i in range(n_streams):
             # data and packets have same content but packets is just
             # broken into the packets
-            data, packets = generate_random_packets(
+            data, packets = msg_utils.generate_random_packets(
                 top_packet_length, n_packets, config.msg_length_width,
                 width, prob_start, self.rg)
             max_stream_length = max(max_stream_length, len(data))
@@ -212,7 +170,7 @@ class TestMessageStreamCombiner(unittest.TestCase):
         for ds in data_streams:
             for i in range(max_stream_length - len(ds)):
                 ds.append(None)
-        expected_packet_dict = make_packet_dict(packet_stream)
+        expected_packet_dict = msg_utils.make_packet_dict(packet_stream)
         combined_data = zip(*data_streams)
         # How many steps are required to simulate the data.
         steps_rqd = len(combined_data) * sendnth * 2 - 1000 # + 1000
@@ -223,12 +181,14 @@ class TestMessageStreamCombiner(unittest.TestCase):
             executable, in_raw=combined_data, width=width)
         tb.run(steps_rqd)
         # Confirm that our method of converting a stream to packets is correct
-        packets_again = stream_to_packets(data_stream, config.msg_length_width, width, allow_samples=False)
-        packet_dict_again = make_packet_dict(packets_again)
+        packets_again = msg_utils.stream_to_packets(
+            data_stream, config.msg_length_width, width, allow_samples=False)
+        packet_dict_again = msg_utils.make_packet_dict(packets_again)
         self.assertEqual(expected_packet_dict, packet_dict_again)
         # Now use it on the ouput rather than the input.
-        received_packets = stream_to_packets(tb.out_raw, config.msg_length_width, width, allow_samples=False)
-        received_packet_dict = make_packet_dict(received_packets)
+        received_packets = msg_utils.stream_to_packets(
+            tb.out_raw, config.msg_length_width, width, allow_samples=False)
+        received_packet_dict = msg_utils.make_packet_dict(received_packets)
         self.assertEqual(expected_packet_dict, received_packet_dict)
 
 class TestMessageSlicer(unittest.TestCase):
@@ -269,7 +229,8 @@ class TestMessageSlicer(unittest.TestCase):
              })
         executable = buildutils.generate_icarus_executable(
             'message', 'message_slicer', '-test', defines)
-        tb = TestBenchMessageSlicer(executable, in_raw=data, width=width)
+        tb = TestBenchMessageSlicer(executable, in_raw=data, width=width,
+                                    output_msgs=False)
         tb.run(steps_rqd)
         # Now check output
         self.assertEqual(len(expected_data), len(tb.out_raw))
@@ -284,13 +245,13 @@ class TestSampleMsgSplitter(unittest.TestCase):
         n_packets = 10
         self.width = 32
         prob_start = 0.1
-        data, packets = generate_random_packets(
+        data, packets = msg_utils.generate_random_packets(
             top_packet_length, n_packets, config.msg_length_width,
             self.width, prob_start, self.rg, none_sample=False)
-        self.dummypacket = generate_random_packet(0, config.msg_length_width, self.width)
+        self.dummypacket = msg_utils.generate_random_packet(0, config.msg_length_width, self.width)
         self.original_data = data
         self.data = data + self.dummypacket * 100000
-        self.samples, self.packets = stream_to_samples_and_packets(
+        self.samples, self.packets = msg_utils.stream_to_samples_and_packets(
             data, config.msg_length_width, self.width)
 
     def test_sample_msg_splitter(self):
@@ -311,7 +272,7 @@ class TestSampleMsgSplitter(unittest.TestCase):
             (tb_b100, 10000),
             ):
             tb.run(steps)
-            samples, packets = stream_to_samples_and_packets(
+            samples, packets = msg_utils.stream_to_samples_and_packets(
                 self.original_data, config.msg_length_width, self.width)
             self.assertEqual(len(samples), len(tb.out_raw))
             for e, r in zip(samples, tb.out_raw):
@@ -335,7 +296,7 @@ class TestSampleMsgSplitter(unittest.TestCase):
             (tb_b100, 1000), 
             ):
             tb.run(steps)
-            samples, packets = stream_to_samples_and_packets(
+            samples, packets = msg_utils.stream_to_samples_and_packets(
                 tb.out_raw, config.msg_length_width, self.width)
             self.assertEqual(len(samples), 0)
             first_index = None
@@ -371,7 +332,7 @@ class TestCombo(unittest.TestCase):
         n_packets = 20
         width = 32
         prob_start = 0.1
-        data, packets = generate_random_packets(
+        data, packets = msg_utils.generate_random_packets(
             top_packet_length, n_packets, config.msg_length_width,
             width, prob_start, self.rg, none_sample=False)
         padded_data = data
@@ -392,9 +353,9 @@ class TestCombo(unittest.TestCase):
                 (tb_b100, 100000), 
                 ):
             tb.run(steps)
-            e_samples, e_packets = stream_to_samples_and_packets(
+            e_samples, e_packets = msg_utils.stream_to_samples_and_packets(
                 data, config.msg_length_width, width)
-            r_samples, r_packets = stream_to_samples_and_packets(
+            r_samples, r_packets = msg_utils.stream_to_samples_and_packets(
                 tb.out_raw, config.msg_length_width, width)
             # Confirm all the samples are equal.
             self.assertEqual(len(e_samples), len(r_samples))
@@ -420,7 +381,7 @@ class TestSplitCombiner(unittest.TestCase):
         data1 = []
         for i in range(n_packets):
             length = random.randint(0, max_packet_length)
-            packet = generate_random_packet(length, config.msg_length_width,
+            packet = msg_utils.generate_random_packet(length, config.msg_length_width,
                                             width)
             data1.extend(packet)
         max_val = pow(2, width-1)-1
@@ -451,9 +412,9 @@ class TestSplitCombiner(unittest.TestCase):
                 (tb_b100, 100000), 
                 ):
             tb.run(steps)
-            e_samples, e_packets = stream_to_samples_and_packets(
+            e_samples, e_packets = msg_utils.stream_to_samples_and_packets(
                 a_data, config.msg_length_width, width)
-            r_samples, r_packets = stream_to_samples_and_packets(
+            r_samples, r_packets = msg_utils.stream_to_samples_and_packets(
                 tb.out_raw, config.msg_length_width, width)
             # Remove 0's from samples.
             # The splitter can introduce 0's at beginning and end.

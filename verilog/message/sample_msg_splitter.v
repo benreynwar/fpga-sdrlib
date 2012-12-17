@@ -37,6 +37,7 @@ module sample_msg_splitter
              out_msg_nd <= 1'b0;
              packet_pos <= {`MSG_LENGTH_WIDTH{1'b0}};
              packet_length <= {`MSG_LENGTH_WIDTH{1'b0}};
+             error <= 1'b0;
           end
         else
           if (in_nd)

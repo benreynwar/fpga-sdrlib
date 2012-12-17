@@ -7,10 +7,11 @@ import unittest
 import logging
 import shutil
 
+from fpga_sdrlib.message import msg_utils
 from fpga_sdrlib.conversions import f_to_int
 from fpga_sdrlib.generate import logceil
 from fpga_sdrlib import config, b100, buildutils
-from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusInner
+from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusInner, TestBenchIcarusOuter
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,10 @@ def convolve(data, taps):
     return out
 
 def taps_to_start_msgs(taps, width):
-    # First block has header flag set.
-    start_msgs = [pow(2, config.msg_width-1)]
-    # Following blocks contain taps.
-    for tap in taps:
-        start_msgs.append(f_to_int(tap, width, clean1=True))
-    return start_msgs
+    contents = [f_to_int(tap, width, clean1=True) for tap in taps]
+    packet = msg_utils.packet_from_content(contents, config.msg_length_width,
+                                           config.msg_width)
+    return packet
 
 class TestFilter(unittest.TestCase):
 
@@ -52,6 +51,7 @@ class TestFilter(unittest.TestCase):
         n_data = 10
         # Define the input
         in_samples = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
+        in_samples += [0]*(filter_length-1)
         steps_rqd = len(in_samples)*sendnth + 100
         # Define meta data
         mwidth = 1
@@ -64,17 +64,21 @@ class TestFilter(unittest.TestCase):
              'FILTER_LENGTH': filter_length,
              'FILTER_ID': 123,
              })
-        executable = buildutils.generate_icarus_executable(
+        executable_inner = buildutils.generate_icarus_executable(
             'flter', 'filter_inner', '-test', defines=defines, extraargs=extraargs)
-        #fpgaimage = buildutils.generate_B100_image(
-        #    'flter', 'filter', '-test', defines=defines,
-        #extraargs=extraargs)
+        executable_outer = buildutils.generate_icarus_executable(
+            'flter', 'filter', '-test', defines=defines, extraargs=extraargs)
+        fpgaimage = buildutils.generate_B100_image(
+            'flter', 'filter', '-test', defines=defines,
+            extraargs=extraargs)
         start_msgs = taps_to_start_msgs(taps, defines['WIDTH']/2)
-        tb_icarus = TestBenchIcarusInner(executable, in_samples, in_ms, start_msgs)
-        #tb_b100 = TestBenchB100(fpgaimage, in_samples, in_ms, start_msgs)
+        tb_icarus_inner = TestBenchIcarusInner(executable_inner, in_samples, in_ms, start_msgs)
+        tb_icarus_outer = TestBenchIcarusOuter(executable_outer, in_samples, start_msgs)
+        tb_b100 = TestBenchB100(fpgaimage, in_samples, start_msgs)
         for tb, steps in (
-                (tb_icarus, steps_rqd),
-                #(tb_b100, 100000), 
+                (tb_icarus_inner, steps_rqd),
+                (tb_icarus_outer, steps_rqd),
+                (tb_b100, 100000), 
                 ):
             tb.run(steps)
             # Confirm that our data is correct.

@@ -10,7 +10,7 @@ from gnuradio import uhd, gr
 from fpga_sdrlib import config
 from fpga_sdrlib import b100
 from fpga_sdrlib.conversions import c_to_int, int_to_c
-from fpga_sdrlib.message.msg_utils import stream_to_packets
+from fpga_sdrlib.message.msg_utils import stream_to_samples_and_packets
 
 def flip_bits(seq, width):
     """
@@ -276,7 +276,8 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
                     'error']
 
     def __init__(self, executable, in_samples=None, start_msgs=None, in_raw=None,
-                 sendnth=config.default_sendnth, width=config.default_width):
+                 sendnth=config.default_sendnth, width=config.default_width,
+                 output_msgs=True):
         super(TestBenchIcarusOuter, self).__init__()
         self.executable = executable
         self.in_samples = in_samples
@@ -286,6 +287,7 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
             raise ValueError("Cannot specify both (in_samples and/or start_msgs) and in_raw")
         self.sendnth = sendnth
         self.width = width
+        self.output_msgs = output_msgs
         # Set the MyHDL drivers
         self.drivers = [self.clk_driver, self.get_output,
                         self.send_input, self.prerun, self.check_error]
@@ -300,9 +302,10 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
     def run(self, steps_rqd):
         super(TestBenchIcarusOuter, self).run(steps_rqd)
         header_shift = pow(2, self.width-1)
-        #packets = stream_to_packets(self.out_raw)
-        #self.out_samples = []
-        #self.out_messages = []
+        if self.output_msgs:
+            samples, packets = stream_to_samples_and_packets(self.out_raw)
+            self.out_samples = [int_to_c(s, self.width/2-1) for s in samples]
+            self.out_messages = packets
         #for p in packets:
         #    if p[0] // header_shift:
         #        self.out_messages.append(p)
@@ -356,7 +359,9 @@ class TestBenchB100(object):
         # Generate the raw data to send in.
         if in_raw is None:
             if self.start_msgs is not None:
-                self.in_raw += self.start_msgs
+                self.in_raw = self.start_msgs
+            else:
+                self.in_raw = []
             # Subtracting 1 from width since we use 1st bit as a header.
             self.in_raw += [c_to_int(d, self.width/2-1) for d in self.in_samples]
         self.out_samples = []
@@ -415,14 +420,16 @@ class TestBenchB100(object):
         self.out_raw = flip_bits(self.out_raw, self.width)
         if self.output_msgs:
             header_shift = pow(2, self.width-1)
-            packets = stream_to_packets(self.out_raw)
-            self.out_samples = []
-            self.out_messages = []
-            for p in packets:
-                if p[0] // header_shift:
-                    self.out_messages.append(p)
-                else:
+            samples, packets = stream_to_samples_and_packets(self.out_raw)
+            self.out_samples = [int_to_c(s, self.width/2-1) for s in samples]
+            self.out_messages = packets
+            #self.out_samples = []
+            #self.out_messages = []
+            #for p in packets:
+            #    if p[0] // header_shift:
+            #        self.out_messages.append(p)
+            #    else:
                     # It is a sample
-                    assert(len(p) == 1)
-                    self.out_samples.append(int_to_c(p[0], self.width/2-1))
+            #        assert(len(p) == 1)
+            #        self.out_samples.append(int_to_c(p[0], self.width/2-1))
     

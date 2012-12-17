@@ -44,7 +44,8 @@ class TestSplit(unittest.TestCase):
              })
         executable = buildutils.generate_icarus_executable(
             'flow', 'split', '-test', defines)
-        tb = TestBenchIcarusOuter(executable, in_raw=data, width=width)
+        tb = TestBenchIcarusOuter(executable, in_raw=data, width=width,
+                                  output_msgs=False)
         tb.run(steps_rqd)
         # Confirm that our data is correct.
         self.assertEqual(len(tb.out_raw), len(expected_data))
@@ -75,7 +76,8 @@ class TestSplit(unittest.TestCase):
             'flow', 'split_return_one', '-test', defines=defines)
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'split_return_one', '-test', defines=defines)
-        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data,
+                                         output_msgs=False)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),
@@ -123,7 +125,8 @@ class TestBufferAA(unittest.TestCase):
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'buffer_AA', '-test', defines=defines)
         #fpgaimage = "/home/ben/Code/fpga-sdrlib/build/flow/build-B100_buffer_AA-test/B100.bin"
-        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data,
+                                         output_msgs=False)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),
@@ -162,7 +165,8 @@ class TestBufferAA(unittest.TestCase):
             'flow', 'buffer_AA_burst', '-test', defines=defines)
         fpgaimage = buildutils.generate_B100_image(
             'flow', 'buffer_AA_burst', '-test', defines=defines)
-        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data,
+                                         output_msgs=False)
         tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
         for tb, steps in (
                 (tb_icarus, steps_rqd),

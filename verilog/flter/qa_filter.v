@@ -14,7 +14,7 @@ module qa_contents
     input wire                   in_msg_nd, 
     output wire [WIDTH-1:0]      out_data,
     output wire                  out_nd,
-    output wire [MWIDTH-1:0]      out_m,
+    output wire [MWIDTH-1:0]     out_m,
     output wire [`MSG_WIDTH-1:0] out_msg,
     output wire                  out_msg_nd,
     output wire                  error
