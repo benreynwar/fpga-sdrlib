@@ -2,16 +2,17 @@
 Generates some wrapper QA files for use with testing on a USRP.
 """
 
-def copyfile(pck, fn):
-    # Put inside to avoid circular dependency
-    from fpga_sdrlib.buildutils import copyfile as cf
-    return cf(pck,fn)
+from fpga_sdrlib.generate import copyfile
 
 blocks = {
     'dut_qa_wrapper.v': (None, copyfile, {}),
+    'dut_qa_contents.v': (None, copyfile, {}),
     'qa_wrapper_null.v': (None, copyfile, {}),
     'bits.v': (None, copyfile, {}),
     'qa_wrapper_bits.v': (('bits.v',), copyfile, {}),
+    'qa_wrapper.v': (('message/sample_msg_splitter.v',
+                      'message/message_stream_combiner.v',),
+                     copyfile, {}),
     }
 
 compatibles = {

@@ -1,46 +1,13 @@
 import shutil
 import os
 import logging
-import math
 import filecmp
 
-from jinja2 import Environment, FileSystemLoader
-
 from fpga_sdrlib import config
-from fpga_sdrlib import message, uhd, flow
+from fpga_sdrlib import message, uhd, flow, flter, fpgamath
 from fpga_sdrlib import b100
 
 logger = logging.getLogger(__name__)
-
-def logceil(n):
-    val = int(math.ceil(float(math.log(n))/math.log(2)))
-    # To keep things simple never return 0.
-    # Declaring reg with 0 length is not legal.
-    if val == 0:
-        val = 1
-    return val
-
-def copyfile(directory, name):
-    in_fn = os.path.join(config.verilogdir, directory, name)
-    out_fn = os.path.join(config.builddir, directory, name)
-    out_dir = os.path.join(config.builddir, directory)
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    shutil.copyfile(in_fn, out_fn)
-    return out_fn                    
-
-def format_template(directory, template_name, output_name, template_args):
-    """
-    Formats a template.
-    """
-    template_fn = os.path.join(directory, template_name)
-    output_fn = os.path.join(config.builddir, directory, output_name)
-    env = Environment(loader=FileSystemLoader(config.verilogdir))
-    template = env.get_template(template_fn)
-    f_out = open(output_fn, 'w')
-    f_out.write(template.render(**template_args))
-    f_out.close()    
-    return output_fn
 
 def make_define_string(defines):
     definestrs = []
@@ -52,10 +19,15 @@ def make_define_string(defines):
             definestrs.append("-D{0}={1}".format(k, v))
     return ' '.join(definestrs)
 
-def generate_block(package, filename, included_dependencies=set(), include_filenames=[]):
+def generate_block(package, filename, extraargs={}, included_dependencies=set(),
+                   include_filenames=[]):
     included_dependencies.add((package, filename))
     dependencies, generating_function, args = blocks[package][filename]
-    include_filenames.append(generating_function(package, filename, **args))
+    if dependencies is None:
+        dependencies = []
+    include_filename, dep_extraargs = generating_function(
+        package, filename, dependencies, extraargs, **args)
+    include_filenames.append(include_filename)
     if dependencies is None:
         dependencies = []
     if args is None:
@@ -68,8 +40,12 @@ def generate_block(package, filename, included_dependencies=set(), include_filen
         else:
             pck = bits[0]
             fn = bits[1]
+        if d in dep_extraargs:
+            extraargs = dep_extraargs[d]
+        else:
+            extraargs = {}
         if (pck, fn) not in included_dependencies:
-            generate_block(pck, fn, included_dependencies, include_filenames)
+            generate_block(pck, fn, extraargs, included_dependencies, include_filenames)
     return included_dependencies, include_filenames
 
 def d2pd(package, dependency):
@@ -85,7 +61,7 @@ def d2pd(package, dependency):
 def pd2fn(pck, fn):
     return os.path.join(config.verilogdir, pck, fn)
     
-def generate_B100_image(package, name, suffix, defines=config.default_defines):
+def generate_B100_image(package, name, suffix, defines=config.default_defines, extraargs={}):
     builddir = os.path.join(config.builddir, package)
     outputdir = os.path.join(builddir, 'build-B100_{name}{suffix}'.format(
             name=name, suffix=suffix))
@@ -99,7 +75,7 @@ def generate_B100_image(package, name, suffix, defines=config.default_defines):
     for d in dependencies:
         pck, fn = d2pd(package, d)
         if (pck, fn) not in included_dependencies:
-            generate_block(pck, fn, included_dependencies, inputfiles)
+            generate_block(pck, fn, extraargs, included_dependencies, inputfiles)
     new_inputfiles= []
     changed = False
     for f in inputfiles:
@@ -124,7 +100,7 @@ def generate_B100_image(package, name, suffix, defines=config.default_defines):
     else:
         return image_fn
 
-def generate_icarus_executable(package, name, suffix, defines=config.default_defines):
+def generate_icarus_executable(package, name, suffix, defines=config.default_defines, extraargs={}):
     builddir = os.path.join(config.builddir, package)
     if name in compatibles[package]:
         dependencies = compatibles[package][name]
@@ -133,13 +109,13 @@ def generate_icarus_executable(package, name, suffix, defines=config.default_def
     else:
         dependencies = incompatibles[package][name]        
     included_dependencies = set()
+    inputfiles = []
     for d in dependencies:
         pck, fn = d2pd(package, d)
         if (pck, fn) not in included_dependencies:
-            generate_block(pck, fn, included_dependencies)
-    inputfiles = [pd2fn(pck, fn) for pck, fn in included_dependencies]
-    print(inputfiles)
+            generate_block(pck, fn, extraargs, included_dependencies, inputfiles)
     inputfilestr = ' '.join(inputfiles)
+    print(inputfilestr)
     executable = name + suffix
     executable = os.path.join(builddir, executable)
     definestr = make_define_string(defines)
@@ -151,20 +127,19 @@ def generate_icarus_executable(package, name, suffix, defines=config.default_def
     os.system(cmd)
     return executable
 
-blocks = {
-    'message': message.blocks,
-    'uhd': uhd.blocks,
-    'flow': flow.blocks,
-    }
-compatibles = {
-    'message': message.compatibles,
-    'uhd': uhd.compatibles,
-    'flow': flow.compatibles,
-    }
-incompatibles = {
-    'message': message.incompatibles,
-    'uhd': uhd.incompatibles,
-    'flow': flow.incompatibles,
-    }
+packages = {'message': message,
+           'uhd': uhd,
+           'flow': flow,
+           'flter': flter,
+           'fpgamath': fpgamath,
+           }
 
+blocks = dict([(key, getattr(sp, 'blocks')) for
+               key, sp in packages.items()])
+
+compatibles = dict([(key, getattr(sp, 'compatibles')) for
+                    key, sp in packages.items()])
+
+incompatibles = dict([(key, getattr(sp, 'incompatibles')) for
+                      key, sp in packages.items()])
 

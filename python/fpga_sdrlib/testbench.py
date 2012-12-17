@@ -193,8 +193,9 @@ class TestBenchIcarusInner(TestBenchIcarusBase):
         self.in_samples = in_samples
         if in_ms is not None:
             assert(len(in_samples) == len(in_ms))
+            self.in_ms = in_ms
         else:
-            in_ms = [0] * len(in_samples)
+            self.in_ms = [0] * len(in_samples)
         self.start_msgs = start_msgs
         self.sendnth = sendnth
         self.width = width

@@ -4,7 +4,7 @@ import unittest
 
 from fpga_sdrlib import config, buildutils
 from fpga_sdrlib.testbench import TestBenchIcarusOuter, TestBenchB100
-from fpga_sdrlib.buildutils import generate_icarus_executable, generate_B100_image, logceil
+from fpga_sdrlib.generate import logceil
 
 def bits_to_int(bits):
     f = 1

@@ -3,10 +3,7 @@ Utility functions to help with generation and verification of
 verilog message stream code.
 """
 
-def copyfile(pck, fn):
-    # Put inside to avoid circular dependency
-    from fpga_sdrlib.buildutils import copyfile as cf
-    return cf(pck,fn)
+from fpga_sdrlib.generate import copyfile
 
 blocks = {
     # The basic modules.

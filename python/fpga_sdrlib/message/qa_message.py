@@ -7,7 +7,7 @@ import unittest
 import logging
 import shutil
 
-from fpga_sdrlib.buildutils import generate_icarus_executable, generate_B100_image, logceil
+from fpga_sdrlib.generate import logceil
 from fpga_sdrlib import config, b100, buildutils
 from fpga_sdrlib.message.msg_utils import stream_to_packets, make_packet_dict, stream_to_samples_and_packets
 from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusOuter
