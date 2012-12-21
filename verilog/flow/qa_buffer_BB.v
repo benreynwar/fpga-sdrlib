@@ -2,7 +2,7 @@
 // Copyright (c) 2012 Ben Reynwar
 // Released under MIT License (see LICENSE.txt)
 
-// A qa_wrapper with a buffer_AA.
+// A qa_wrapper with a buffer_BB.
 
 module qa_wrapper
   #(
@@ -25,7 +25,7 @@ module qa_wrapper
    wire                    write_error;
    wire                    read_error;
 
-   buffer_AA #(WDTH, `BUFFER_LENGTH, `LOG_BUFFER_LENGTH)
+   buffer_BB #(WDTH, `BUFFER_LENGTH, `LOG_BUFFER_LENGTH)
    the_buffer 
      (.clk(clk),
       .rst_n(rst_n),
@@ -61,7 +61,7 @@ module qa_wrapper
             end
           else
             begin
-               if (!read_delete && read_full)
+               if (read_full)
                  begin
                     read_delete <= 1'b1;
                     out_nd <= 1'b1;

@@ -24,7 +24,6 @@ module qa_wrapper
    wire [WDTH-1:0]         read_data;
    wire                    write_error;
    wire                    read_error;
-   wire [`BUFFER_LENGTH-1:0] full;
    reg [`LOG_BURST_LENGTH-1:0] burst_counter;
 
    buffer_AA #(WDTH, `BUFFER_LENGTH, `LOG_BUFFER_LENGTH)
@@ -37,8 +36,7 @@ module qa_wrapper
       .read_full(read_full),
       .read_data(read_data),
       .write_error(write_error),
-      .read_error(read_error),
-      .full(full)
+      .read_error(read_error)
       );
 
    always @ (posedge clk)

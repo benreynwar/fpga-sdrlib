@@ -61,19 +61,25 @@ def make_summult(pck, fn, dependencies, extraargs={}):
 blocks = {
     # The basic modules.
     'filter.v.t': (('summult.v.t',), make_filter, {}),
-    # A qa_contents module for a filter.
+    'summult.v.t': (('fpgamath/multiply.v', ), make_summult, {}),
+    'filterbank.v': (('filter.v.t', 'flow/buffer_BB.v', ), copyfile, {}),
+    # A qa_contents modules
     'qa_filter.v': (('filter.v.t',), copyfile, {}),
-    'summult.v.t': (('fpgamath/multiply.v', ), make_summult, {})
+    'qa_filterbank.v': (('filterbank.v',), copyfile, {}),
     }
 
 # compatible with running on the B100
 compatibles = {
     'filter': 
         ('qa_filter.v', 'uhd/qa_wrapper.v',),
+    'filterbank': 
+        ('qa_filterbank.v', 'uhd/qa_wrapper.v',),
 }
 
 # Not compatible with running on the B100
 incompatibles = {
     'filter_inner': 
         ('qa_filter.v', 'uhd/dut_qa_contents.v'),
+    'filterbank_inner': 
+        ('qa_filterbank.v', 'uhd/dut_qa_contents.v',),
 }

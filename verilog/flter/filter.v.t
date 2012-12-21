@@ -37,7 +37,7 @@ module filter
       end
    endfunction
    
-   localparam integer            LOG_FLTLEN = clog2(FLTLEN);//$ceil($log10(FLTLEN)/$log10(2));
+   localparam integer            LOG_FLTLEN = clog2(FLTLEN);
      
    reg [WIDTH*(FLTLEN-1)-1:0]   history;
    reg                          in_nd_old;
@@ -82,12 +82,16 @@ module filter
           // If first bit is 1 then this is a header so we start reseting taps.
           if (in_msg[`MSG_WIDTH-1])
             begin
-               which_pos <= {LOG_FLTLEN{1'b0}};
-               setting_taps <= 1'b1;
                // We tried to set taps while being in the middle of setting them.
                if (setting_taps)
                  begin
                     tap_set_error <= 1'b1;
+                 end
+               // FIXME: Position should not be hardwired in.
+               if (in_msg[16:7] == ID)
+                 begin
+                    which_pos <= {LOG_FLTLEN{1'b0}};
+                    setting_taps <= 1'b1;
                  end
             end
           else if (setting_taps)

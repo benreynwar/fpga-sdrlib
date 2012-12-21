@@ -1,10 +1,13 @@
 import random
 
-from fpga_sdrlib.config import msg_length_width, msg_width
+from fpga_sdrlib.config import msg_length_width, msg_width, msg_errorcode_width
 
-def generate_header(length, bits_for_length, width):
-    info_max = int(pow(2, width-1-bits_for_length)-1)
-    info = random.randint(0, info_max)
+def generate_header(length, bits_for_length, width, target=None):
+    if target is None:
+        info_max = int(pow(2, width-1-bits_for_length)-1)
+        info = random.randint(0, info_max)
+    else:
+        info = target * pow(2, msg_errorcode_width)
     header = (1 << int(width-1)) + (length << int(width-1-bits_for_length)) + info
     return header
 
@@ -18,10 +21,10 @@ def generate_random_packet(length, bits_for_length, width):
     return packet
 
 def packet_from_content(content, bits_for_length=msg_length_width,
-                        width=msg_width):
+                        width=msg_width, target=0):
     l = len(content)
     packet = []
-    packet.append(generate_header(l, bits_for_length, width))
+    packet.append(generate_header(l, bits_for_length, width, target))
     packet.extend(content)
     return packet
 

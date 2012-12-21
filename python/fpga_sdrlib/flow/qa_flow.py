@@ -98,11 +98,11 @@ class TestSplit(unittest.TestCase):
                 else:
                     self.assertEqual(a, r)
 
-class TestBufferAA(unittest.TestCase):
+class TestBuffer(unittest.TestCase):
 
     def test_one(self):
         """
-        Test the buffer_AA module.
+        Test the buffer_AA and buffer_BB module.
         """
         width = config.default_width
         sendnth = 1
@@ -120,17 +120,25 @@ class TestBufferAA(unittest.TestCase):
              'WRITEERRORCODE': 666,
              'READERRORCODE': 777,
              })
-        executable = buildutils.generate_icarus_executable(
+        executableAA = buildutils.generate_icarus_executable(
             'flow', 'buffer_AA', '-test', defines=defines)
-        fpgaimage = buildutils.generate_B100_image(
+        fpgaimageAA = buildutils.generate_B100_image(
             'flow', 'buffer_AA', '-test', defines=defines)
-        #fpgaimage = "/home/ben/Code/fpga-sdrlib/build/flow/build-B100_buffer_AA-test/B100.bin"
-        tb_icarus = TestBenchIcarusOuter(executable, in_raw=data,
+        executableBB = buildutils.generate_icarus_executable(
+            'flow', 'buffer_BB', '-test', defines=defines)
+        fpgaimageBB = buildutils.generate_B100_image(
+            'flow', 'buffer_BB', '-test', defines=defines)
+        tb_icarusAA = TestBenchIcarusOuter(executableAA, in_raw=data,
                                          output_msgs=False)
-        tb_b100 = TestBenchB100(fpgaimage, in_raw=data, output_msgs=False)
+        tb_b100AA = TestBenchB100(fpgaimageAA, in_raw=data, output_msgs=False)
+        tb_icarusBB = TestBenchIcarusOuter(executableBB, in_raw=data,
+                                         output_msgs=False)
+        tb_b100BB = TestBenchB100(fpgaimageBB, in_raw=data, output_msgs=False)
         for tb, steps in (
-                (tb_icarus, steps_rqd),
-                (tb_b100, 100000), 
+                (tb_icarusAA, steps_rqd),
+                (tb_b100AA, 100000), 
+                (tb_icarusBB, steps_rqd),
+                (tb_b100BB, 100000), 
                 ):
             tb.run(steps)
             # Confirm that our data is correct.
@@ -182,6 +190,6 @@ class TestBufferAA(unittest.TestCase):
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
     #suite = unittest.TestLoader().loadTestsFromTestCase(TestSplit)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestBufferAA)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestBuffer)
     #unittest.TextTestRunner(verbosity=2).run(suite)
     unittest.main()

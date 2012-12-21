@@ -7,10 +7,9 @@ import unittest
 import logging
 import shutil
 
-
 from fpga_sdrlib.generate import logceil
 from fpga_sdrlib import config, b100, buildutils
-from fgpa_sdrlib.message import msg_utils
+from fpga_sdrlib.message import msg_utils
 from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusOuter
 from fpga_sdrlib.uhd.qa_uhd import bits_to_int
 
