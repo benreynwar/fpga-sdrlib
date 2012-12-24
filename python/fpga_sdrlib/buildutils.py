@@ -4,7 +4,7 @@ import logging
 import filecmp
 
 from fpga_sdrlib import config
-from fpga_sdrlib import message, uhd, flow, flter, fpgamath
+from fpga_sdrlib import message, uhd, flow, flter, fpgamath, fft
 from fpga_sdrlib import b100
 
 logger = logging.getLogger(__name__)
@@ -128,11 +128,12 @@ def generate_icarus_executable(package, name, suffix, defines=config.default_def
     return executable
 
 packages = {'message': message,
-           'uhd': uhd,
-           'flow': flow,
-           'flter': flter,
-           'fpgamath': fpgamath,
-           }
+            'uhd': uhd,
+            'flow': flow,
+            'flter': flter,
+            'fpgamath': fpgamath,
+            'fft': fft,
+            }
 
 blocks = dict([(key, getattr(sp, 'blocks')) for
                key, sp in packages.items()])
