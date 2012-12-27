@@ -21,7 +21,7 @@ module dut_qa_contents;
       $to_myhdl(out_data, out_nd, out_m, out_msg, out_msg_nd, error);
    end
 
-   qa_contents #(`WIDTH) qa_contents_0
+   qa_contents #(`WIDTH, `MWIDTH) qa_contents_0
      (.clk(clk),
       .rst_n(rst_n),
       .in_data(in_data),

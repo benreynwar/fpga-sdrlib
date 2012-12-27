@@ -12,19 +12,19 @@ module buffer_BB
     parameter LOG_MEM_SIZE = 6
     )
    (
-    input wire                clk,
-    input wire                rst_n,
+    input wire               clk,
+    input wire               rst_n,
     // Write new data.
-    input wire                write_strobe,
-    input wire [WIDTH-1: 0]   write_data,
+    input wire               write_strobe,
+    input wire [WIDTH-1: 0]  write_data,
     // Delete the current read data.
-    input wire                read_delete,
+    input wire               read_delete,
     // The current read data.
-    output wire                read_full,
-    output wire [WIDTH-1: 0]   read_data,
+    output wire              read_full,
+    output wire [WIDTH-1: 0] read_data,
     // Buffer overflow.
-    output reg                write_error,
-    output reg                read_error
+    output reg               write_error,
+    output reg               read_error
     );
 
    reg [MEM_SIZE-1:0]         full;

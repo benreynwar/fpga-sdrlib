@@ -4,13 +4,13 @@ module mstore
     parameter MWIDTH = 1
     )
    (
-    input wire  clk,
-    input wire  rst_n,
-    input wire  in_nd,
-    input wire  in_m,
-    input wire  in_read,
-    output wire out_m,
-    output reg  error
+    input wire               clk,
+    input wire               rst_n,
+    input wire               in_nd,
+    input wire [MWIDTH-1:0]  in_m,
+    input wire               in_read,
+    output wire [MWIDTH-1:0] out_m,
+    output reg               error
     );
 
    function integer clog2;
@@ -25,10 +25,12 @@ module mstore
    localparam integer            LOG_N = clog2(N);
 
    reg [LOG_N-1:0]               addr;
+   wire [LOG_N-1:0]               next_addr;
    reg [MWIDTH-1:0]              RAM[N-1:0];
    reg                           filling;
 
-   assign out_m = RAM[addr];
+   assign next_addr = addr+1;
+   assign out_m = (in_read)?RAM[next_addr]:RAM[addr];
    
    always @ (posedge clk)
      if (~rst_n)
