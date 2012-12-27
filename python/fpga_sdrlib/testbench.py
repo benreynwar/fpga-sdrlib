@@ -304,6 +304,9 @@ class TestBenchIcarusOuter(TestBenchIcarusBase):
         header_shift = pow(2, self.width-1)
         if self.output_msgs:
             samples, packets = stream_to_samples_and_packets(self.out_raw)
+            for s in samples:
+                if s == config.errorcode:
+                    raise ValueError("Errorcode detected.")
             self.out_samples = [int_to_c(s, self.width/2-1) for s in samples]
             self.out_messages = packets
         #for p in packets:

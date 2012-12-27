@@ -15,9 +15,10 @@ module MULT18X18S
      if(R)
        P <= 36'sd0;
      else if(CE)
-       P <= A * B;
-
-endmodule // MULT18X18S
+       begin
+          P <= A * B;
+       end
+endmodule 
 
 `endif
 
@@ -30,7 +31,7 @@ module multiply
     input wire                   rst_n,
     input wire signed [WDTH-1:0] x,
     input wire signed [WDTH-1:0] y,
-    output reg signed [WDTH-1:0] z
+    output wire signed [WDTH-1:0] z
     );
 
    reg                          ce;
@@ -45,11 +46,12 @@ module multiply
    
    MULT18X18S multer (.P(xy), .A(xb), .B(yb), .C(clk), .CE(ce), .R(~rst_n));   
 
-
+   assign z = xy >>> (WDTH-1);
+   
    always @ (posedge clk)
      begin
         //xy <= xb * yb;
-        z <= xy >>> (WDTH-2);
+        //z <= xy >>> (WDTH-2);
       end
    
 endmodule

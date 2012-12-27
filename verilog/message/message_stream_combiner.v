@@ -40,6 +40,7 @@ module message_stream_combiner
    
    genvar                            i;
    // Set up the input buffers.
+   // FIXME: Change this to use buffer_BB so it is faster.
    generate
       for (i=0; i<N_STREAMS; i=i+1) begin: LOOP_0
          buffer_AA #(WIDTH, INPUT_BUFFER_LENGTH, LOG_INPUT_BUFFER_LENGTH)
