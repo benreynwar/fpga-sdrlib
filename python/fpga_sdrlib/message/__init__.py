@@ -8,8 +8,9 @@ from fpga_sdrlib.generate import copyfile
 blocks = {
     # The basic modules.
     'message_stream_combiner.v': (('flow/buffer_AA.v',), copyfile, {}),
-    'message_slicer.v': (None, copyfile, {}),
+    'message_slicer.v': (('flow/buffer_BB.v',), copyfile, {}),
     'sample_msg_splitter.v': (None, copyfile, {}),
+    'smaller.v': (None, copyfile, {}),
     # Some dut's for incompatible icarus simulations.
     'dut_message_stream_combiner.v': (None, copyfile, {}),
     'dut_message_slicer.v': (None, copyfile, {}),
@@ -31,10 +32,14 @@ blocks = {
     # and another always empty stream then put through the bits module
     # so we can see the individual bits.
     'qa_message_stream_combiner_bits.v': (None, copyfile, {}),
+    # Test sending back debug messages.
+    'qa_debug.v': (('smaller.v', 'message_slicer.v',), copyfile, {}),
     }
 
 # compatible with running on the B100
 compatibles = {
+    'debug':
+        ('qa_debug.v', 'uhd/qa_wrapper.v'),
     'sample_msg_splitter': 
         ('sample_msg_splitter.v', 'qa_sample_msg_splitter.v'),
     'sample_msg_splitter_returns_msgs': 

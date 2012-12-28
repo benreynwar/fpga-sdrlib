@@ -226,6 +226,11 @@ class TestBenchIcarusInner(TestBenchIcarusBase):
         """
         TestBenchIcarusBase.run(self, clks)
         self.out_samples = [int_to_c(r, self.width/2) for r in self.out_raw]
+        samples, packets = stream_to_samples_and_packets(self.out_msgs) 
+        if samples:
+            raise StandardError("Found samples is message stream.")
+        self.out_messages = packets
+        
 
     def prerun(self):
         self.first = True

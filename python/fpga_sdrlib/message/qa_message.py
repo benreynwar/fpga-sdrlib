@@ -55,40 +55,6 @@ class TestBenchMessageStreamCombiner(TestBenchIcarusOuter):
                     self.count += 1
         return run
 
-class TestBenchMessageSlicer(TestBenchIcarusOuter):
-    """
-    Message slicer needs it's own test bench because it's not the
-    value of in_nd that indicats new data but rather whether it has
-    changed.
-
-    This is to make generating messages in the module code more
-    convenient.
-    """
-
-    def send_input(self):
-        self.count = 0
-        self.first = True
-        self.datapos = 0
-        @always(self.clk.posedge)
-        def run():
-            """
-            Sends input to our DUT (design-under-test) and
-            receives output.
-            """
-            if not self.doing_prerun:
-                # Send input.
-                if self.count >= self.sendnth and self.datapos < len(self.in_raw):
-                    self.in_data.next = self.in_raw[self.datapos]
-                    if 'in_m' in self.signal_names:
-                        self.in_m.next = self.in_ms[self.datapos]
-                    self.in_nd.next = not self.in_nd
-                    self.datapos += 1
-                    self.count = 0
-                else:
-                    self.count += 1
-        return run
-
-
 class TestMessageStreamCombiner(unittest.TestCase):
 
     def setUp(self):
@@ -228,7 +194,7 @@ class TestMessageSlicer(unittest.TestCase):
              })
         executable = buildutils.generate_icarus_executable(
             'message', 'message_slicer', '-test', defines)
-        tb = TestBenchMessageSlicer(executable, in_raw=data, width=width,
+        tb = TestBenchIcarusOuter(executable, in_raw=data, width=width,
                                     output_msgs=False)
         tb.run(steps_rqd)
         # Now check output
@@ -518,17 +484,48 @@ class TestMessageStreamCombinerOne(unittest.TestCase):
             for e, r in zip(data, r_ints):
                 self.assertEqual(e, r)
 
+class TestDebug(unittest.TestCase):
+    
+    def test_one(self):
+        """
+        Tests passing debug messages back.
+        """
+        width = 32
+        sendnth = 2
+        max_val = pow(2, width-2)-1
+        n_data = 10
+        in_data = [random.randint(1, max_val) for i in range(n_data)]
+        defines = config.updated_defines({})
+        executable = buildutils.generate_icarus_executable(
+            'message', 'debug', '-test', defines=defines)
+        fpgaimage = buildutils.generate_B100_image(
+            'message', 'debug', '-test', defines=defines)
+        tb_icarus = TestBenchIcarusOuter(executable, in_raw=in_data,
+                                         sendnth=sendnth)
+        tb_b100 = TestBenchB100(fpgaimage, in_raw=in_data)
+        for tb, steps in (
+            #(tb_icarus, len(in_data)*sendnth*2+1000),
+            (tb_b100, 100000), 
+            ):
+            tb.run(steps)
+            r_samples, r_packets = msg_utils.stream_to_samples_and_packets(
+                tb.out_raw, config.msg_length_width, width)
+            print(in_data)
+            print(r_samples)
+            print(r_packets)
+            self.assertEqual(len(in_data), len(r_samples))
+            for e, r in zip(in_data, r_samples):
+                self.assertEqual(e, r)
+            e_even = [s for s in in_data if s%2==0]
+            r_even = [p[1] for p in r_packets]
+            self.assertEqual(len(e_even), len(r_even))
+            for e, r in zip(e_even, r_even):
+                self.assertEqual(e, r)
+
 
 
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
-
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestSampleMsgSplitter)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestCombo)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestSplitCombiner)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageSlicer)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageStreamCombiner)
-    #suite = unittest.TestLoader().loadTestsFromTestCase(TestMessageStreamCombinerOne)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestDebug)
     #unittest.TextTestRunner(verbosity=2).run(suite)
-
     unittest.main()

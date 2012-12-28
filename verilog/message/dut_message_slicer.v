@@ -22,8 +22,7 @@ module dut_message_slicer;
    assign rst_n = ~reset;
    
    message_slicer
-     #( `N_SLICES, `LOG_N_SLICES, `WIDTH,
-        `BUFFER_LENGTH, `LOG_BUFFER_LENGTH)
+     #(`N_SLICES, `WIDTH, `BUFFER_LENGTH)
    dut
      (clk, rst_n, in_data, in_nd, out_data, out_nd, error);
    

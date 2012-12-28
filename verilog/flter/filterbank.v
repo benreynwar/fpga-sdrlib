@@ -40,7 +40,6 @@ module filterbank
    
    localparam integer           LOG_N = clog2(N);
    localparam integer           LOG_FLTLEN = clog2(FLTLEN);
-   localparam integer           LOG_MSG_BUFFER_LENGTH = clog2(MSG_BUFFER_LENGTH);
    
    wire [N-1:0]                 in_nds;
    reg [N-1:0]                  in_nds_mask;
@@ -92,13 +91,12 @@ module filterbank
       end
    endgenerate
         
-   wire                        buffer_write_error;
-   wire                        buffer_read_error;
+   wire                        buffer_error;
    wire [WIDTH-1:0]            read_msg;
    wire                        read_msg_ready;
    reg                         delete_msg;
    
-   buffer_BB #(WIDTH, MSG_BUFFER_LENGTH, LOG_MSG_BUFFER_LENGTH) buffer_BB_0
+   buffer_BB #(WIDTH, MSG_BUFFER_LENGTH) buffer_BB_0
      (.clk(clk),
       .rst_n(rst_n),
       .write_strobe(in_msg_nd),
@@ -106,8 +104,7 @@ module filterbank
       .read_delete(delete_msg),
       .read_full(read_msg_ready),
       .read_data(read_msg),
-      .write_error(buffer_write_error),
-      .read_error(buffer_read_error)
+      .error(buffer_error)
       );
 
    localparam N_LENGTH = 10;
@@ -231,6 +228,6 @@ module filterbank
         //  $display("%d %d %d %d %d", out_filter_unexpected_error, buffer_write_error, buffer_read_error, tap_set_error, filter_error);
         //$display("out_filter=%d in_nds=%b out_nds=%b", out_filter, in_nds, out_nds);
      end
-   assign error = out_filter_unexpected_error | buffer_write_error | buffer_read_error | tap_set_error | filter_error;
+   assign error = out_filter_unexpected_error | buffer_error | tap_set_error | filter_error;
 
 endmodule 

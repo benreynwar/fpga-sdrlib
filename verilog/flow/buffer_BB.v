@@ -8,8 +8,7 @@
 module buffer_BB
   #(
     parameter WIDTH = 32,
-    parameter MEM_SIZE = 64,
-    parameter LOG_MEM_SIZE = 6
+    parameter MEM_SIZE = 64
     )
    (
     input wire               clk,
@@ -23,10 +22,24 @@ module buffer_BB
     output wire              read_full,
     output wire [WIDTH-1: 0] read_data,
     // Buffer overflow.
-    output reg               write_error,
-    output reg               read_error
+    output wire               error
     );
 
+   reg                        read_error;
+   reg                        write_error;
+   assign error = read_error | write_error;
+   
+   function integer clog2;
+      input integer              value;
+      begin
+         value = value-1;
+         for (clog2=0; value>0; clog2=clog2+1)
+           value = value>>1;
+      end
+   endfunction
+
+   localparam integer LOG_MEM_SIZE = clog2(MEM_SIZE);
+   
    reg [MEM_SIZE-1:0]         full;
    reg [WIDTH-1: 0]           RAM[MEM_SIZE-1:0];
    reg [LOG_MEM_SIZE-1: 0]    write_addr;
@@ -55,6 +68,8 @@ module buffer_BB
        end
      else
        begin
+          if (error)
+            $display("There was an error");
           if (write_strobe)
             begin
                if (!full[write_addr])
