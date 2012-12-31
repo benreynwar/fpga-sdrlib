@@ -20,7 +20,7 @@ module qa_contents
     output reg [MWIDTH-1:0]      out_m,
     output wire [`MSG_WIDTH-1:0] out_msg,
     output wire                  out_msg_nd, 
-    output reg                   error
+    output wire                  error
     );
 
    reg [WIDTH-1:0]               xa;
@@ -69,21 +69,24 @@ module qa_contents
    reg [WIDTH-1:0]  yb_old;
    wire             y_nd;
    reg              y_nd_old;
-
+   reg              error_control;
+   wire             error_bf;
+   assign error = error_control | error_bf;
+   
    always @ (posedge clk)
      begin
         // default out_nd
         out_nd <= 1'b0;
         y_nd_old <= y_nd;
-        error <= 1'b0;
         if (~rst_n)
           begin
+             error_control <= 1'b0;
              y_nd_old <= 1'b0;
           end
         else if (y_nd)
           begin
              if (y_nd_old)
-               error <= 1'b1;
+               error_control <= 1'b1;
              yb_old <= yb;
              out_data <= ya;
              out_nd <= 1'b1;
@@ -111,7 +114,12 @@ module qa_contents
 	  .m_out (bf_out_m),
 	  .ya (ya),
 	  .yb (yb),
-	  .y_nd (y_nd)
+	  .y_nd (y_nd),
+`ifdef DEBUG
+      .out_msg(out_msg),
+      .out_msg_nd(out_msg_nd),
+`endif
+      .error(error_bf)
 	  );
    
 

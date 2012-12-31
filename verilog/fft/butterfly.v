@@ -38,7 +38,14 @@ module butterfly
     // YB = XA - W*XB
     output wire signed [WIDTH-1:0] ya,
     output wire signed [WIDTH-1:0] yb,
-    output reg                     y_nd
+    output reg                     y_nd,
+`ifdef DEBUG
+    output wire [WIDTH-1:0]        out_msg,
+    output wire                    out_msg_nd,
+    output wire                    error
+`else
+    output reg                     error
+`endif
     );
 
    // Set wire to the real and imag parts for convenience.
@@ -79,16 +86,38 @@ module butterfly
       .y(w),
       .z(xbw)
       );
-   
+
+`ifdef DEBUG
+   // Process debug messages.
+   reg [5*WIDTH-1:0]               msg;
+   reg                             msg_nd;
+   wire [WIDTH-1:0]                xa_s;
+   wire [WIDTH-1:0]                xbw_s;
+   wire [WIDTH-1:0]                ya_s;
+   wire [WIDTH-1:0]                yb_s;
+   smaller #(WIDTH) smaller_0 ({xa_re_z, xa_im_z}, xa_s);
+   smaller #(WIDTH) smaller_1 (xbw, xbw_s);
+   smaller #(WIDTH) smaller_2 (ya, ya_s);
+   smaller #(WIDTH) smaller_3 (yb, yb_s);
+   message_slicer #(5, WIDTH, 48) message_slicer_0
+     (clk, rst_n, msg, msg_nd, out_msg, out_msg_nd, error);
+`endif
+      
   always @ (posedge clk)
     begin
        if (!rst_n)
          begin
             y_nd <= 1'b0;
+`ifndef DEBUG
+            error <= 1'b0;
+`endif
          end
        else
          begin
             // Set delay for x_nd_old and m.
+`ifdef DEBUG
+            msg_nd <= 1'b0;
+`endif
             y_nd <= x_nd;
             m_out <= m_in;
             if (x_nd)
@@ -96,6 +125,15 @@ module butterfly
                  xa_re_z <= xa_re/2;
                  xa_im_z <= xa_im/2;
               end
+`ifdef DEBUG
+            // We test that xa_s is not equal to zero, so that we don't return debug
+            // info on the continually streamed 0's.
+            if (y_nd & (xa_s != 0))
+              begin
+                 msg <= {1'b1, 10'd4, 21'd0, xa_s, xbw_s, ya_s, yb_s};
+                 msg_nd <= 1'b1;
+              end
+`endif
          end
     end
    

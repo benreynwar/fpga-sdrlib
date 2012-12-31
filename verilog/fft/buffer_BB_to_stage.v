@@ -30,12 +30,11 @@ module buffer_BB_to_stage
     // To mStore
     output reg                     out_mnd,
     output reg [MWIDTH-1:0]        out_m,
-    // Finished Signal
-    output reg                     finished,
+    // Whether it is active
+    output wire                    active,
     output reg                     error
     );
 
-   reg                             active;
    reg [LOG_N-1:0]                 addr;
    assign out_addr0 = addr;
    assign out_addr1 = addr + 1;
@@ -44,34 +43,36 @@ module buffer_BB_to_stage
    wire [MWIDTH-1:0]               read_data_m;
    assign {read_data_s, read_data_m} = read_data;
    reg                             first_read;
+   reg                             active_o;
+
+   assign active = active_o | start;
    
    always @ (posedge clk)
      begin
         // Set the default values;
         out_nd <= 1'b0;
-        finished <= 1'b0;
         read_delete <= 1'b0;
         out_mnd <= 1'b0;
         if (~rst_n)
           begin
-             active <= 1'b0;
+             active_o <= 1'b0;
              addr <= {LOG_N{1'b0}};
              read_counter <= 1'b0;
              error <= 1'b0;
           end
         else if (start)
           begin
-             if (active)
+             if (active_o)
                error <= 1'b1;
              else
                begin
-                  active <= 1'b1;
+                  active_o <= 1'b1;
                   addr <= {LOG_N{1'b0}};
                   read_counter <= 1'b0;
                   first_read <= 1'b1;
                end
           end
-        else if (active & read_full)
+        else if (active_o & read_full)
           begin
              out_mnd <= 1'b1;
              out_m <= read_data_m;
@@ -94,8 +95,7 @@ module buffer_BB_to_stage
                   out_nd <= 1'b1;
                   if (addr == N-2)
                     begin
-                       active <= 1'b0;
-                       finished <= 1'b1;
+                       active_o <= 1'b0;
                     end
                end
           end

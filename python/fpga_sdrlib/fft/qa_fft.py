@@ -6,12 +6,14 @@ import random
 import unittest
 import logging
 import shutil
+from numpy import fft
 
 from fpga_sdrlib.message import msg_utils
-from fpga_sdrlib.conversions import f_to_int
+from fpga_sdrlib.conversions import int_to_c
 from fpga_sdrlib.generate import logceil
 from fpga_sdrlib import config, b100, buildutils
 from fpga_sdrlib.testbench import TestBenchB100, TestBenchIcarusInner, TestBenchIcarusOuter
+from fpga_sdrlib.fft.dit import pystage
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +36,9 @@ class TestButterfly(unittest.TestCase):
         """
         Test the butterfly module.
         """
-        sendnth = 2
-        n_data = 100
+        sendnth = 5
+        n_data = 1
+        width = 32
         in_samples = []
         expected = []
         xas = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
@@ -59,25 +62,41 @@ class TestButterfly(unittest.TestCase):
         for m in raw_ms:
             in_ms.extend((m, 0, 0))
             expected_ms.extend((m, 0))
+        defines = config.updated_defines({
+            'DEBUG': True,
+            })
         executable_inner = buildutils.generate_icarus_executable(
-            'fft', 'butterfly_inner', '-test',)
+            'fft', 'butterfly_inner', '-test', defines=defines)
 
         executable_outer = buildutils.generate_icarus_executable(
-            'fft', 'butterfly', '-test',)
-        fpgaimage = buildutils.generate_B100_image(
-            'fft', 'butterfly', '-test')
+            'fft', 'butterfly', '-test', defines=defines)
+        #fpgaimage = buildutils.generate_B100_image(
+        #    'fft', 'butterfly', '-test', defines=defines)
         tb_icarus_inner = TestBenchIcarusInner(executable_inner, in_samples, in_ms, sendnth=sendnth)
         tb_icarus_outer = TestBenchIcarusOuter(executable_outer, in_samples, sendnth=sendnth)
-        tb_b100 = TestBenchB100(fpgaimage, in_samples)
+        #tb_b100 = TestBenchB100(fpgaimage, in_samples)
         for tb, steps, check_ms in (
                 (tb_icarus_inner, steps_rqd, True),
                 (tb_icarus_outer, steps_rqd, False),
-                (tb_b100, 100000, False), 
+                #(tb_b100, 100000, False), 
                 ):
             tb.run(steps)
             # Confirm that our data is correct.
+            print(tb.out_raw)
+            print(tb.out_samples)
+            print(expected)
             self.assertEqual(len(tb.out_samples), len(expected))
+            for msg in tb.out_messages:
+                print("message is")
+                print(msg)
+                xa = int_to_c(msg[1], width/2-1)
+                xbw = int_to_c(msg[2], width/2-1)
+                ya = int_to_c(msg[3], width/2-1)
+                yb = int_to_c(msg[4], width/2-1)
+                print("e xa is {0} xbw is {1}".format(xas[0]/2, xbs[0]*ws[0]/2))
+                print("r xa is {0} xbw is {1}".format(xa, xbw))
             for r, e in zip(tb.out_samples, expected):
+                print(e, r)
                 self.assertAlmostEqual(e, r, 3)
             if check_ms:
                 self.assertEqual(len(tb.out_ms), len(expected_ms))
@@ -85,63 +104,11 @@ class TestButterfly(unittest.TestCase):
                     self.assertEqual(e, r)
         
         
-
-class TestDIT(unittest.TestCase):
-
-    def test_one(self):
-        """
-        Test the dit module.
-        """
-        width = config.default_width
-        sendnth = config.default_sendnth
-        # Changing N will require resynthesis.
-        N = 8
-        # Arguments used for producing verilog from templates.
-        extraargs = {}
-        # Amount of data to send.
-        n_data = 10
-        # Define the input
-        in_samples = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
-        steps_rqd = len(in_samples)*sendnth + 100
-        # Define meta data
-        mwidth = 1
-        in_ms = [random.randint(0, pow(2,mwidth)-1) for d in in_samples]
-        expected = in_samples
-        steps_rqd = n_data * sendnth * 2 + 1000
-        filter_id = 123
-        # Create, setup and simulate the test bench.
-        defines = config.updated_defines(
-            {'WIDTH': width,
-             'FFT_LEN': N
-             })
-        executable_inner = buildutils.generate_icarus_executable(
-            'fft', 'dit_inner', '-{0}'.format(N), defines=defines,
-            extraargs=extraargs)
-        executable_outer = buildutils.generate_icarus_executable(
-            'fft', 'dit', '-{0}'.format(N), defines=defines,
-            extraargs=extraargs)
-        #fpgaimage = buildutils.generate_B100_image(
-        #    'flter', 'filter', '-{0}'.format(N), defines=defines,
-        #    extraargs=extraargs)
-        tb_icarus_inner = TestBenchIcarusInner(executable_inner, in_samples, in_ms)
-        tb_icarus_outer = TestBenchIcarusOuter(executable_outer, in_samples)
-        #tb_b100 = TestBenchB100(fpgaimage, in_samples)
-        for tb, steps in (
-                (tb_icarus_inner, steps_rqd),
-                (tb_icarus_outer, steps_rqd),
-        #        (tb_b100, 100000), 
-                ):
-            tb.run(steps)
-            # Confirm that our data is correct.
-            self.assertEqual(len(tb.out_samples), len(expected))
-            for r, e in zip(tb.out_samples, expected):
-                self.assertAlmostEqual(e, r, 3)
-
 class TestStage(unittest.TestCase):
 
     def test_one(self):
         """
-        Test the dit module.
+        Test the stage module.
         """
         width = config.default_width
         sendnth = config.default_sendnth
@@ -178,7 +145,7 @@ class TestStage(unittest.TestCase):
         tb_icarus_outer = TestBenchIcarusOuter(executable_outer, in_samples)
         #tb_b100 = TestBenchB100(fpgaimage, in_samples)
         for tb, steps, check_ms in (
-                #(tb_icarus_inner, steps_rqd, True),
+                (tb_icarus_inner, steps_rqd, True),
                 (tb_icarus_outer, steps_rqd, False),
                 #(tb_b100, 100000, False), 
                 ):
@@ -196,31 +163,39 @@ class TestStageToStage(unittest.TestCase):
 
     def test_one(self):
         """
-        Test the dit module.
+        Test the stage_to_stage module.
         """
         width = config.default_width
         sendnth = config.default_sendnth
         # Changing N will require resynthesis.
-        N = 8
+        N = 16
         # Arguments used for producing verilog from templates.
-        extraargs = {'fft_len': N,
+        extraargs = {'N': N,
                      'width': width}
         # Amount of data to send.
-        n_data = 2*N
-        # Define the input
+        n_data = 10*N
+        # Define the input.
+        # I think must have abs mag 1 so divide by sqrt(2)
         in_samples = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
+        factor = pow(2, -0.5)
+        in_samples = [s*factor for s in in_samples]
         steps_rqd = len(in_samples)*sendnth + 100
         # Define meta data
         mwidth = 3
         in_ms = [random.randint(0, pow(2,mwidth)-1) for d in in_samples]
-        expected = in_samples
         steps_rqd = n_data * sendnth * 2 + 1000
+        stage_index = 1
+        # Calculate expected output
+        e_samples = []
+        for stage_samples in [in_samples[i*N:(i+1)*N] for i in range(n_data/N)]:
+            e_samples.extend(pystage(N, stage_index, stage_samples))
+        e_samples = [s/2 for s in e_samples]
         # Create, setup and simulate the test bench.
         defines = config.updated_defines(
             {'WIDTH': width,
              'MWIDTH': mwidth,
              'N': N,
-             'STAGE_INDEX': 0,
+             'STAGE_INDEX': stage_index,
              })
         executable_inner = buildutils.generate_icarus_executable(
             'fft', 'stage_to_stage_inner', '-{0}'.format(N), defines=defines,
@@ -241,8 +216,71 @@ class TestStageToStage(unittest.TestCase):
                 ):
             tb.run(steps)
             # Confirm that our data is correct.
-            self.assertEqual(len(tb.out_samples), len(expected))
-            for r, e in zip(tb.out_samples, expected):
+            self.assertEqual(len(tb.out_samples), len(e_samples))
+            for r, e in zip(tb.out_samples, e_samples):
+                self.assertAlmostEqual(e, r, 3)
+            if check_ms:
+                self.assertEqual(len(tb.out_ms), len(in_ms))
+                for r, e in zip(tb.out_ms, in_ms):
+                    self.assertEqual(e, r)
+
+class TestDITSeries(unittest.TestCase):
+
+    def test_one(self):
+        """
+        Test the dit_series module.
+        """
+        width = config.default_width
+        sendnth = config.default_sendnth
+        # Changing N will require resynthesis.
+        N = 16
+        # Arguments used for producing verilog from templates.
+        extraargs = {'N': N,
+                     'width': width}
+        # Amount of data to send.
+        n_data = 1*N
+        # Define the input.
+        # I think must have abs mag 1 so divide by sqrt(2)
+        in_samples = [random.random()*2-1 + random.random()*2j-1j for i in range(n_data)]
+        factor = pow(2, -0.5)
+        in_samples = [s*factor for s in in_samples]
+        steps_rqd = len(in_samples)*sendnth + 100
+        # Define meta data
+        mwidth = 3
+        in_ms = [random.randint(0, pow(2,mwidth)-1) for d in in_samples]
+        steps_rqd = n_data * sendnth * 2 + 1000
+        # Calculate expected output
+        e_samples = []
+        for stage_samples in [in_samples[i*N:(i+1)*N] for i in range(n_data/N)]:
+            e_samples.extend(fft.fft(stage_samples))
+        e_samples = [s/N for s in e_samples]
+        # Create, setup and simulate the test bench.
+        defines = config.updated_defines(
+            {'WIDTH': width,
+             'MWIDTH': mwidth,
+             'N': N,
+             })
+        executable_inner = buildutils.generate_icarus_executable(
+            'fft', 'dit_series_inner', '-{0}'.format(N), defines=defines,
+            extraargs=extraargs)
+        #executable_outer = buildutils.generate_icarus_executable(
+        #    'fft', 'dit_series', '-{0}'.format(N), defines=defines,
+        #    extraargs=extraargs)
+        #fpgaimage = buildutils.generate_B100_image(
+        #    'fft', 'stage_to_stage', '-{0}'.format(N), defines=defines,
+        #    extraargs=extraargs)
+        tb_icarus_inner = TestBenchIcarusInner(executable_inner, in_samples, in_ms)
+        #tb_icarus_outer = TestBenchIcarusOuter(executable_outer, in_samples)
+        #tb_b100 = TestBenchB100(fpgaimage, in_samples)
+        for tb, steps, check_ms in (
+                (tb_icarus_inner, steps_rqd, True),
+                #(tb_icarus_outer, steps_rqd, False),
+                #(tb_b100, 100000, False), 
+                ):
+            tb.run(steps)
+            # Confirm that our data is correct.
+            self.assertEqual(len(tb.out_samples), len(e_samples))
+            for r, e in zip(tb.out_samples, e_samples):
                 self.assertAlmostEqual(e, r, 3)
             if check_ms:
                 self.assertEqual(len(tb.out_ms), len(in_ms))
@@ -251,6 +289,7 @@ class TestStageToStage(unittest.TestCase):
 
 if __name__ == '__main__':
     config.setup_logging(logging.DEBUG)
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestButterfly)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestDITSeries)
+    #suite = unittest.TestLoader().loadTestsFromTestCase(TestStageToStage)
     unittest.TextTestRunner(verbosity=2).run(suite)
     #unittest.main()

@@ -43,11 +43,11 @@ module qa_contents
    
    localparam integer            LOG_N = clog2(`N);
 
+   // The input buffer
    wire                          buffer_read_delete;
    wire                          buffer_read_full;
    wire [WIDTH+MWIDTH-1:0]       buffer_data;
-   wire                          buffer_write_error;
-   wire                          buffer_read_error;
+   wire                          buffer_error;
    
    buffer_BB #(WIDTH+MWIDTH, `N, LOG_N) buffer_in
      (
@@ -58,12 +58,12 @@ module qa_contents
       .read_delete(buffer_read_delete),
       .read_full(buffer_read_full),
       .read_data(buffer_data),
-      .write_error(buffer_write_error),
-      .read_error(buffer_read_error)
+      .error(buffer_error)
       );
 
+   // Tranfer from the buffer to the first stage (and to the meta-data buffer).
    reg                           b2s_start;
-   wire                          b2s_finished;
+   wire                          b2s_active;
    wire [LOG_N-1:0]              b2s_addr0;
    wire [LOG_N-1:0]              b2s_addr1;
    wire                          b2s_nd;
@@ -88,42 +88,36 @@ module qa_contents
       .out_data1(b2s_data1),
       .out_mnd(b2s_mnd),
       .out_m(b2s_m),
-      .finished(b2s_finished),
+      .active(b2s_active),
       .error(b2s_error)
       );
 
-   wire                          mstore_read;
-   wire                          mstore_error;
+   // The meta-data buffer.
+   wire                          mbuffer_read;
+   wire                          mbuffer_error;
+   wire                          mbuffer_full;
    wire [MWIDTH-1:0]             s2o_m;
    
-   mstore #(`N, MWIDTH) mstore_0
+   buffer_BB #(MWIDTH, `N*2) mstore
      (
       .clk(clk),
       .rst_n(rst_n),
-      .in_nd(b2s_mnd),
-      .in_m(b2s_m),
-      .in_read(mstore_read),
-      .out_m(s2o_m),
-      .error(mstore_error)
+      .write_strobe(b2s_mnd),
+      .write_data(b2s_m),
+      .read_delete(mbuffer_read),
+      .read_full(mbuffer_full),
+      .read_data(s2o_m),
+      .error(mbuffer_error)
       );
 
-   // Stage 0 to Stage 1
+   // The first stage.
    wire [LOG_N-1:0]              s2ss_addr0;
    wire [LOG_N-1:0]              s2ss_addr1;
    wire [WIDTH-1:0]              s2ss_data0;
    wire [WIDTH-1:0]              s2ss_data1;
-   wire [LOG_N-1:0]              ss2s_addr0;
-   wire [LOG_N-1:0]              ss2s_addr1;
-   wire [WIDTH-1:0]              ss2s_data0;
-   wire [WIDTH-1:0]              ss2s_data1;
-   wire                          ss2s_nd;
-   // Stage 1 to output
-   wire [LOG_N-1:0]              s2o_addr0;
-   wire [LOG_N-1:0]              s2o_addr1;
-   wire [WIDTH-1:0]              s2o_data0;
-   wire [WIDTH-1:0]              s2o_data1;
    wire                          error_stage0;
-   wire                          error_stage1;
+   wire [1:0]                    state_stage0;
+   wire                          ss_active;
    
    stage #(`N, LOG_N, WIDTH) stage_0
      (
@@ -134,29 +128,41 @@ module qa_contents
       .in_nd(b2s_nd),
       .in_data0(b2s_data0),
       .in_data1(b2s_data1),
+      .in_active(b2s_active),
       .out_addr0(s2ss_addr0),
       .out_addr1(s2ss_addr1),
       .out_data0(s2ss_data0),
       .out_data1(s2ss_data1),
+      .out_active(ss_active),
+      .state(state_stage0),
       .error(error_stage0)
       );
+
+   // Tranfer from the first stage to the second stage.
+   wire [LOG_N-1:0]              ss2s_addr0;
+   wire [LOG_N-1:0]              ss2s_addr1;
+   wire [WIDTH-1:0]              ss2s_data0;
+   wire [WIDTH-1:0]              ss2s_data1;
+   wire                          ss2s_nd;
 
    reg [LOG_N-1:0]               ss_index;
    reg                           ss_mode;
    wire [WIDTH-1:0]              ss2null_data0;
    wire [WIDTH-1:0]              ss2null_data1;
-   wire                          ss2null_nd;
+   wire                          ssnull_start;
+   wire                          ssnull_active;
    wire                          ss_error;
    reg                           ss_start;
+
+   assign ssnull_start = 1'b0;
    
-   stage_to_stage #(`N, LOG_N, WIDTH) stage_to_stage_0
+   stage_to_stage_{{N}} #(`N, LOG_N, WIDTH) stage_to_stage_0
      (
       .clk(clk),
       .rst_n(rst_n),
       .stage_index(ss_index),
-      .start(ss_start),
-      .mode(ss_mode),
-      .finished(ss_finished),
+      .start_A(ss_start),
+      .start_B(ssnull_start),
       .from_addr0(s2ss_addr0),
       .from_addr1(s2ss_addr1),
       .to_addr0(ss2s_addr0),
@@ -165,12 +171,22 @@ module qa_contents
       .to_data1(ss2s_data1),
       .from_data0_A(s2ss_data0),
       .from_data1_A(s2ss_data1),
-      .to_nd_A(ss2s_nd),
+      .to_nd(ss2s_nd),
+      .active_A(ss_active),
       .from_data0_B(ss2null_data0),
       .from_data1_B(ss2null_data1),
-      .to_nd_B(ss2null_nd),
+      .active_B(ssnull_active),
       .error(ss_error)
     );
+
+   // The Second Stage.
+   wire [LOG_N-1:0]              s2o_addr0;
+   wire [LOG_N-1:0]              s2o_addr1;
+   wire [WIDTH-1:0]              s2o_data0;
+   wire [WIDTH-1:0]              s2o_data1;
+   wire                          error_stage1;
+   wire [1:0]                    state_stage1;
+   wire                          s2o_active;
    
    stage #(`N, LOG_N, WIDTH) stage_1
      (
@@ -181,19 +197,18 @@ module qa_contents
       .in_nd(ss2s_nd),
       .in_data0(ss2s_data0),
       .in_data1(ss2s_data1),
+      .in_active(ss_active),
       .out_addr0(s2o_addr0),
       .out_addr1(s2o_addr1),
       .out_data0(s2o_data0),
       .out_data1(s2o_data1),
+      .out_active(s2o_active),
+      .state(state_stage1),
       .error(error_stage1)
       );
 
-   always @ (posedge clk)
-     if (ss2s_nd)
-       $display("Input to second stage is %d %d at addr %d %d", ss2s_data0, ss2s_data1, ss2s_addr0, ss2s_addr1);
-   
+   // Transfer from the second stage to the output.
    reg                           s2o_start;
-   wire                          s2o_finished;
    wire                          s2o_error;
    
    stage_to_out #(`N, LOG_N, WIDTH, MWIDTH) s2o
@@ -203,26 +218,20 @@ module qa_contents
       .start(s2o_start),
       .addr(s2o_addr0),
       .in_data(s2o_data0),
-      .out_mread(mstore_read),
+      .out_mread(mbuffer_read),
+      .in_mfull(mbuffer_full),
       .in_m(s2o_m),
       .out_nd(out_nd),
       .out_data(out_data),
       .out_m(out_m),
-      .finished(s2o_finished),
+      .active(s2o_active),
       .error(s2o_error)
       );
 
-   reg                           writing;
-   reg                           control_error;
-
-   assign stage_addr0 = (writing)?b2s_addr0:s2o_addr0;
-   assign stage_addr1 = b2s_addr1;
-
-   localparam  [1:0]  STATE_IN = 0;
-   localparam  [1:0]  STATE_SS = 1;
-   localparam  [1:0]  STATE_OUT = 2;
-
-   reg [1:0]                     state;                     
+   localparam integer       STAGE_EMPTY = 2'd0;
+   localparam integer       STAGE_WRITING = 2'd1;
+   localparam integer       STAGE_FULL = 2'd2;
+   localparam integer       STAGE_READING = 2'd3;
    
    always @ (posedge clk)
      begin
@@ -230,48 +239,27 @@ module qa_contents
         b2s_start <= 1'b0;
         ss_start <= 1'b0;
         s2o_start <= 1'b0;
+        //$display("errors %d %d %d %d %d %d %d", buffer_error, b2s_error, mbuffer_error, error_stage0, error_stage1, s2o_error, ss_error);
+        //$display("states are %d %d", state_stage0, state_stage1);
+        //$display("b2s_start is %d ss_start is %d s2o_start is %d", b2s_start, ss_start, s2o_start);
+        //$display("b2s_active is %d ss_active is %d s2o_active is %d", b2s_active, ss_active, s2o_active);
         if (~rst_n)
           begin
-             state <= STATE_IN;
              b2s_start <= 1'b1;
-             control_error <= 1'b0;
              ss_index <= `STAGE_INDEX;
-             ss_mode <= 1'b0;
-             $display("STATE_IN");
           end
         else
           begin
-             if (b2s_finished)
-               if (state != STATE_IN)
-                 control_error <= 1'b1;
-               else
-                 begin
-                    $display("STATE_SS");
-                    ss_start <= 1'b1;
-                    state <= STATE_SS;
-                 end
-             if (ss_finished)
-               if (state != STATE_SS)
-                 control_error <= 1'b1;
-               else
-                 begin
-                    $display("STATE_OUT");
-                    s2o_start <= 1'b1;
-                    state <= STATE_OUT;
-                 end
-             if (s2o_finished)
-               if (state != STATE_OUT)
-                 control_error <= 1'b1;
-               else
-                 begin
-                    $display("STATE_IN");
-                    b2s_start <= 1'b1;
-                    state <= STATE_IN;
-                 end
+             if (state_stage0 == STAGE_EMPTY)
+               b2s_start <= 1'b1;
+             if ((state_stage0 == STAGE_FULL) & (state_stage1 == STAGE_EMPTY))
+               ss_start <= 1'b1;
+             if (state_stage1 == STAGE_FULL)
+               s2o_start <= 1'b1;
           end
      end
        
-   assign error = buffer_write_error | buffer_read_error | b2s_error | mstore_error | error_stage0 | error_stage1 | s2o_error | control_error | ss_error;
+   assign error = buffer_error | b2s_error | mbuffer_error | error_stage0 | error_stage1 | s2o_error | ss_error;
 
    
 endmodule

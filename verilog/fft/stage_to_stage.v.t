@@ -11,7 +11,7 @@
 // The is because each connection is only active half the time (A stage
 // is either begin written or read to, not both at the same time).
 
-module stage_to_stage
+module stage_to_stage_{{N}}
   #(
     parameter N = 8,
     parameter LOG_N = 3,
@@ -20,11 +20,9 @@ module stage_to_stage
    (input wire clk,
     input wire              rst_n,
     // Control signals
-    input wire [LOG_N-1:0]   stage_index,
-    input wire              start,
-    // mode A is 0, mode B is 1
-    input wire              mode,
-    output reg              finished,
+    input wire [LOG_N-1:0]  stage_index,
+    input wire              start_A,
+    input wire              start_B,
     // Mode A and B
     output wire [LOG_N-1:0] from_addr0,
     output wire [LOG_N-1:0] from_addr1,
@@ -32,34 +30,36 @@ module stage_to_stage
     output wire [LOG_N-1:0] to_addr1,
     output wire [WIDTH-1:0] to_data0,
     output wire [WIDTH-1:0] to_data1,
+    output wire             to_nd,
     // Mode A
     input wire [WIDTH-1:0]  from_data0_A,
     input wire [WIDTH-1:0]  from_data1_A,
-    output wire             to_nd_A,
+    output wire             active_A,
     // Mode B
     input wire [WIDTH-1:0]  from_data0_B,
     input wire [WIDTH-1:0]  from_data1_B,
-    output wire             to_nd_B,
+    output wire             active_B,
     // Other
     output wire             error
     );
 
+   reg                      mode;
+   
    // The connection of these depends on the mode.
    wire [WIDTH-1:0]         from_data0;
    wire [WIDTH-1:0]         from_data1;
-   wire                     to_nd;
 
    assign from_data0 = (mode)?from_data0_B:from_data0_A;
    assign from_data1 = (mode)?from_data1_B:from_data1_A;
-   assign to_nd_A = (mode)?1'b0:to_nd;
-   assign to_nd_B = (mode)?to_nd:1'b0;
                             
    // Output address send to butterfly
    reg [LOG_N-1:0]          to_addr0_bf;
    wire [LOG_N-1:0]         to_addr1_bf;
    wire [LOG_N-2:0] tf_addr;
-   
-   reg                      active;
+
+   reg              active;
+   assign active_A = (((~mode) & active) | start_A);
+   assign active_B = ((mode & active) | start_B);
    // Number of series in the stage we are writing to.
    reg [LOG_N-1:0]          S;
    // Contains a 1 for the bits that give j from from_addr0 (i.e. which series).
@@ -139,18 +139,11 @@ module stage_to_stage
 
    reg                      bf_nd;
    reg                      control_error;
-   
-   always @ (posedge clk)
-     begin
-        if (bf_nd)
-          $display("m_in is %d %d", to_addr0_bf, to_addr1_bf);
-        if (to_nd)
-          $display("m_out is %d %d", to_addr0, to_addr1);
-     end
+   reg                      reading;
    
    butterfly 
-     #(.M_WDTH   (2*LOG_N),
-	   .X_WDTH   (WIDTH/2)
+     #(.MWIDTH   (2*LOG_N),
+	   .WIDTH   (WIDTH)
 	   )
    butterfly_0
      (.clk (clk),
@@ -171,25 +164,30 @@ module stage_to_stage
         // Default values.
         tf_addr_nd <= 1'b0;
         bf_nd <= 1'b0;
-        finished <= 1'b0;
         if (~rst_n)
           begin
+             mode <= 1'b0;
              active <= 1'b0;
+             reading <= 1'b0;
              control_error <= 1'b0;
           end
-        else if (start)
+        else if (start_A | start_B)
           begin
-             if (active)
+             reading <= 1'b1;
+             active <= 1'b1;
+             mode <= start_B;
+             if (start_A & start_B)
+               control_error <= 1'b1;
+             if (active | reading)
                control_error <= 1'b1;
 		     series_bits <= {LOG_N{1'b1}} >> (stage_index+1);
 		     // In stage_index 0 There are N/2 series.
              // There are half as many in each subsequent stage.
 		     S <= {1'b1,{LOG_N-1{1'b0}}} >> stage_index;
-             active <= 1'b1;
              to_addr0_bf <= {LOG_N{1'b0}};
              tf_addr_nd <= 1'b1;
           end
-        else if (active)
+        else if (reading)
           begin
              // Send data to the butterfly every second clock cycle.
              bf_nd <= ~bf_nd;
@@ -198,11 +196,17 @@ module stage_to_stage
                   to_addr0_bf <= to_addr0_bf+1;
                   tf_addr_nd <= 1'b1;
                   if (to_addr0_bf == N/2-1)
-                    active = 1'b0;
+                    begin
+                       reading <= 1'b0;
+                    end
                end
           end
         else if (to_nd & (to_addr0 == N/2-1))
-          finished <= 1'b1;
+          begin
+             if (reading)
+               control_error <= 1'b1;
+             active <= 1'b0;
+          end
      end
 
    assign error = control_error;

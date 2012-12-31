@@ -8,12 +8,16 @@ module smaller #(parameter WIDTH = 32)
     );
    wire signed [WIDTH/2-1:0] val_re;
    wire signed [WIDTH/2-1:0] val_im;
+   wire signed [WIDTH/2-1:0] val_re_i;
+   wire signed [WIDTH/2-1:0] val_im_i;
    wire signed [WIDTH/2-2:0] val_re_s;
    wire signed [WIDTH/2-2:0] val_im_s;
    assign val_re = in_val[WIDTH-1:WIDTH/2];
    assign val_im = in_val[WIDTH/2-1:0];
-   assign val_re_s = val_re >> 1;
-   assign val_im_s = val_im >> 1;
+   assign val_re_i = val_re/2;
+   assign val_im_i = val_im/2;
+   assign val_re_s = val_re_i;
+   assign val_im_s = val_im_i;
    assign out_val = {2'b0, val_re_s, val_im_s};
 endmodule
 

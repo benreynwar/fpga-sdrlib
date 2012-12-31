@@ -37,14 +37,18 @@ module qa_contents
    endfunction
    
    localparam integer            LOG_N = clog2(`N);
+   
+   localparam integer            STAGE_EMPTY = 2'd0;
+   localparam integer            STAGE_WRITING = 2'd1;
+   localparam integer            STAGE_FULL = 2'd2;
+   localparam integer            STAGE_READING = 2'd3;
 
    wire                          buffer_read_delete;
    wire                          buffer_read_full;
    wire [WIDTH+MWIDTH-1:0]       buffer_data;
-   wire                          buffer_write_error;
-   wire                          buffer_read_error;
+   wire                          buffer_error;
    
-   buffer_BB #(WIDTH+MWIDTH, `N, LOG_N) buffer_in
+   buffer_BB #(WIDTH+MWIDTH, `N) buffer_in
      (
       .clk(clk),
       .rst_n(rst_n),
@@ -53,12 +57,11 @@ module qa_contents
       .read_delete(buffer_read_delete),
       .read_full(buffer_read_full),
       .read_data(buffer_data),
-      .write_error(buffer_write_error),
-      .read_error(buffer_read_error)
+      .error(buffer_error)
       );
 
    reg                           b2s_start;
-   wire                          b2s_finished;
+   wire                          b2s_active;
    wire [LOG_N-1:0]              b2s_addr0;
    wire [LOG_N-1:0]              b2s_addr1;
    wire                          b2s_nd;
@@ -83,23 +86,25 @@ module qa_contents
       .out_data1(b2s_data1),
       .out_mnd(b2s_mnd),
       .out_m(b2s_m),
-      .finished(b2s_finished),
+      .active(b2s_active),
       .error(b2s_error)
       );
 
-   wire                          mstore_read;
-   wire                          mstore_error;
+   wire                          mbuffer_read;
+   wire                          mbuffer_error;
+   wire                          mbuffer_full;
    wire [MWIDTH-1:0]             s2o_m;
    
-   mstore #(`N, MWIDTH) mstore_0
+   buffer_BB #(MWIDTH, `N*2) mstore
      (
       .clk(clk),
       .rst_n(rst_n),
-      .in_nd(b2s_mnd),
-      .in_m(b2s_m),
-      .in_read(mstore_read),
-      .out_m(s2o_m),
-      .error(mstore_error)
+      .write_strobe(b2s_mnd),
+      .write_data(b2s_m),
+      .read_delete(mbuffer_read),
+      .read_full(mbuffer_full),
+      .read_data(s2o_m),
+      .error(mbuffer_error)
       );
 
    wire [LOG_N-1:0]              s2o_addr0;
@@ -107,7 +112,9 @@ module qa_contents
    wire [WIDTH-1:0]              s2o_data0;
    wire [WIDTH-1:0]              s2o_data1;
    wire                          error_stage;
-   
+   wire [1:0]                    s_state;
+   wire                          s2o_active;
+
    stage #(`N, LOG_N, WIDTH) stage_0
      (
       .clk(clk),
@@ -117,15 +124,17 @@ module qa_contents
       .in_nd(b2s_nd),
       .in_data0(b2s_data0),
       .in_data1(b2s_data1),
+      .in_active(b2s_active),
       .out_addr0(s2o_addr0),
       .out_addr1(s2o_addr1),
       .out_data0(s2o_data0),
       .out_data1(s2o_data1),
+      .out_active(s2o_active),
+      .state(s_state),
       .error(error_stage)
       );
 
    reg                           s2o_start;
-   wire                          s2o_finished;
    wire                          s2o_error;
    
    stage_to_out #(`N, LOG_N, WIDTH, MWIDTH) s2o
@@ -135,17 +144,16 @@ module qa_contents
       .start(s2o_start),
       .addr(s2o_addr0),
       .in_data(s2o_data0),
-      .out_mread(mstore_read),
+      .out_mread(mbuffer_read),
       .in_m(s2o_m),
       .out_nd(out_nd),
       .out_data(out_data),
       .out_m(out_m),
-      .finished(s2o_finished),
+      .active(s2o_active),
       .error(s2o_error)
       );
 
    reg                           writing;
-   reg                           control_error;
 
    assign stage_addr0 = (writing)?b2s_addr0:s2o_addr0;
    assign stage_addr1 = b2s_addr1;
@@ -156,32 +164,19 @@ module qa_contents
        begin
           writing <= 1'b1;
           b2s_start <= 1'b1;
-          control_error <= 1'b0;
+          s2o_start <= 1'b0;
        end
      else
        begin
           //defaults
           b2s_start <= 1'b0;
           s2o_start <= 1'b0;
-          if (b2s_finished)
-            if (~writing)
-              control_error <= 1'b1;
-            else
-              begin
-                 s2o_start <= 1'b1;
-                 writing <= 1'b0;
-              end
-          if (s2o_finished)
-            if (writing)
-              control_error <= 1'b1;
-            else
-              begin
-                 b2s_start <= 1'b1;
-                 writing <= 1'b1;
-              end
+          if (s_state == STAGE_EMPTY)
+            b2s_start <= 1'b1;
+          else if (s_state == STAGE_FULL)
+            s2o_start <= 1'b1;
        end
        
-   assign error = buffer_write_error | buffer_read_error | b2s_error | mstore_error | error_stage | s2o_error | control_error;
-
+   assign error = buffer_error | b2s_error | mbuffer_error | error_stage | s2o_error;
    
 endmodule
